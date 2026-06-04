@@ -1,0 +1,20 @@
+package routes
+
+import (
+	"backend/controllers"
+
+	"github.com/gin-gonic/gin"
+)
+
+func SetupRoutes(r *gin.Engine) {
+	r.GET("/api/items", controllers.GetItems)
+	r.POST("/api/items", controllers.AddItem)
+	r.GET("/api/items/:kodeBrng", controllers.GetItemByKode)
+	r.GET("/api/masters", controllers.GetMasters)
+	r.GET("/api/suppliers", controllers.GetSuppliers)
+	r.POST("/api/suppliers", controllers.AddSupplier)
+	r.PUT("/api/suppliers/:id", controllers.UpdateSupplier)
+	r.DELETE("/api/suppliers/:id", controllers.DeleteSupplier)
+    r.PUT("/api/items/:kodeBrng", controllers.UpdateItem)
+	r.DELETE("/api/items/:kodeBrng",controllers.DeleteItem)
+}
