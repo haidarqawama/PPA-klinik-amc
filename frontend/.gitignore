@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+*.exe
+*.log
+temp_*.txt
+billing_table.txt
