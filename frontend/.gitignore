@@ -44,3 +44,4 @@ next-env.d.ts
 *.log
 temp_*.txt
 billing_table.txt
+test_*.go
