@@ -3,7 +3,6 @@ package controllers
 import (
 	"backend/config"
 	"backend/models"
-	"fmt"
 
 	"github.com/gin-gonic/gin"
 )
@@ -84,46 +83,6 @@ func GetDashboard(c *gin.Context) {
     `).Scan(&locationStock).Error; err != nil {
 		c.JSON(500, gin.H{"error": "Gagal mengambil data lokasi stok", "detail": err.Error()})
 		return
-	}
-
-	// Debug: Check if tables have data
-	var debugCount1, debugCount2 int64
-	config.SIK.Raw("SELECT COUNT(*) FROM data_batch").Scan(&debugCount1)
-	config.SIK.Raw("SELECT COUNT(*) FROM pengeluaran_obat_bhp").Scan(&debugCount2)
-	fmt.Printf("DEBUG: data_batch count: %d, pengeluaran_obat_bhp count: %d\n", debugCount1, debugCount2)
-
-	if err := config.SIK.Raw(`
-        SELECT
-            COALESCE(DATE_FORMAT(t.bulan, '%b %Y'), 'Unknown') AS month,
-            CAST(COALESCE(SUM(CASE WHEN t.tipe = 'masuk' THEN t.jumlah ELSE 0 END), 0) AS SIGNED) AS barang_masuk,
-            CAST(COALESCE(SUM(CASE WHEN t.tipe = 'keluar' THEN t.jumlah ELSE 0 END), 0) AS SIGNED) AS barang_keluar
-        FROM (
-            SELECT DATE_FORMAT(data_batch.tgl_beli, '%Y-%m-01') AS bulan, SUM(COALESCE(data_batch.jumlahbeli, 0)) AS jumlah, 'masuk' AS tipe
-            FROM data_batch
-            WHERE data_batch.tgl_beli IS NOT NULL
-            AND data_batch.tgl_beli >= DATE_SUB(CURDATE(), INTERVAL 5 MONTH)
-            GROUP BY DATE_FORMAT(data_batch.tgl_beli, '%Y-%m-01')
-            
-            UNION ALL
-            
-            SELECT DATE_FORMAT(pengeluaran_obat_bhp.tanggal, '%Y-%m-01') AS bulan, SUM(COALESCE(detail_pengeluaran_obat_bhp.jumlah, 0)) AS jumlah, 'keluar' AS tipe
-            FROM pengeluaran_obat_bhp
-            JOIN detail_pengeluaran_obat_bhp ON pengeluaran_obat_bhp.no_keluar = detail_pengeluaran_obat_bhp.no_keluar
-            WHERE pengeluaran_obat_bhp.tanggal IS NOT NULL
-            AND pengeluaran_obat_bhp.tanggal >= DATE_SUB(CURDATE(), INTERVAL 5 MONTH)
-            GROUP BY DATE_FORMAT(pengeluaran_obat_bhp.tanggal, '%Y-%m-01')
-        ) t
-        GROUP BY t.bulan
-        ORDER BY t.bulan ASC
-    `).Scan(&stockMovement).Error; err != nil {
-		fmt.Println("DEBUG: Error scanning stockMovement:", err)
-		c.JSON(500, gin.H{"error": "Gagal mengambil data pergerakan stok", "detail": err.Error()})
-		return
-	}
-
-	fmt.Printf("DEBUG: stockMovement count: %d\n", len(stockMovement))
-	if len(stockMovement) > 0 {
-		fmt.Printf("DEBUG: First record: %+v\n", stockMovement[0])
 	}
 
 	summary.ExpiringSoonCount = expiringSoonCount
