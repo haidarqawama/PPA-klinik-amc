@@ -180,17 +180,46 @@ func AddItem(c *gin.Context) {
 		item.Stok,
 	)
 
-	// Simpan stok ke gudang utama
+	// cek apakah sudah ada di gudangbarang
+	var count int64
+
 	config.SIK.
 		Table("gudangbarang").
 		Where(
-			"kode_brng = ?",
+			"kode_brng = ? AND kd_bangsal = ?",
 			item.KodeBarang,
+			"AP",
 		).
-		Update(
-			"stok",
-			item.Stok,
-		)
+		Count(&count)
+
+	if count > 0 {
+
+		// update stok jika sudah ada
+		config.SIK.
+			Table("gudangbarang").
+			Where(
+				"kode_brng = ? AND kd_bangsal = ?",
+				item.KodeBarang,
+				"AP",
+			).
+			Update(
+				"stok",
+				item.Stok,
+			)
+
+	} else {
+
+		// insert jika belum ada
+		config.SIK.
+			Table("gudangbarang").
+			Create(
+				map[string]interface{}{
+					"kode_brng": item.KodeBarang,
+					"kd_bangsal": "AP",
+					"stok": item.Stok,
+				},
+			)
+	}
 
 	c.JSON(201, gin.H{
 		"message": "barang berhasil ditambahkan",
