@@ -8,7 +8,7 @@ export default function AddItem() {
   const [hargaBeli, setHargaBeli] = useState("");
   const [hargaUmum, setHargaUmum] = useState("");
   const [hargaUtama, setHargaUtama] = useState("");
-  const [hargaBeliLuar, setHargaBeliLuar] = useState("");
+  const [hargaApotek, setHargaApotek] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -18,9 +18,9 @@ export default function AddItem() {
         .replace(/\./g, "") || 0
     );
 
-  const beliLuar =
+  const apotek =
     Number(
-      String(hargaBeliLuar)
+      String(hargaApotek)
         .replace(/\./g, "") || 0
     );
 
@@ -51,19 +51,9 @@ export default function AddItem() {
         ).toFixed(1)
       : "0";
 
-  // BERDASARKAN HARGA BELI LUAR
-  const marginUmumBeliLuar =
-    beliLuar > 0
-      ? (
-          ((umum - beliLuar) / beliLuar) * 100
-        ).toFixed(1)
-      : "0";
-
-  const marginUtamaBeliLuar =
-    beliLuar > 0
-      ? (
-          ((utama - beliLuar) / beliLuar) * 100
-        ).toFixed(1)
+  const marginApotekBeli =
+    beli > 0
+      ? (((apotek - beli) / beli) * 100).toFixed(1)
       : "0";
 
   const [formData, setFormData] = useState({
@@ -77,7 +67,7 @@ export default function AddItem() {
     harga_beli: 0,
     harga_umum: 0,
     harga_utama: 0,
-    harga_beli_luar: 0,
+    harga_apotek: 0,
     expired: ""
   });
 
@@ -121,7 +111,7 @@ export default function AddItem() {
       !hargaBeli ||
       !hargaUmum ||
       !hargaUtama ||
-      !hargaBeliLuar ||
+      !hargaApotek ||
       Number(formData.stok) <= 0
     ) {
     
@@ -158,7 +148,7 @@ export default function AddItem() {
 
           harga_utama: Number(String(hargaUtama).replace(/\./g,"")),
 
-          harga_beli_luar: Number(String(hargaBeliLuar).replace(/\./g,"")),
+          harga_apotek: Number(String(hargaApotek).replace(/\./g,"")),
         
           expired: formData.expired
             ? `${formData.expired}T00:00:00Z`
@@ -182,14 +172,14 @@ export default function AddItem() {
           harga_beli: 0,
           harga_umum: 0,
           harga_utama: 0,
-          harga_beli_luar: 0,
+          harga_apotek: 0,
           expired: ""
         });
         
         setHargaBeli("");
         setHargaUmum("")
         setHargaUtama("")
-        setHargaBeliLuar("")
+        setHargaApotek("")
         window.scrollTo({
           top: 0,
           behavior: "smooth"
@@ -412,15 +402,41 @@ export default function AddItem() {
                   inputMode="numeric"
                   placeholder="0"
                   value={hargaBeli}
-                  onChange={(e) => setHargaBeli(formatNumber(e.target.value))}
+                  onChange={(e) => {
+                    const value = formatNumber(e.target.value);
+                  
+                    setHargaBeli(value);
+                  
+                    const beli = Number(
+                      value.replace(/\./g, "")
+                    );
+                  
+                    setHargaUtama(
+                      formatNumber(
+                        Math.round(beli * 1.1).toString()
+                      )
+                    );
+                  
+                    setHargaApotek(
+                      formatNumber(
+                        Math.round(beli * 1.3).toString()
+                      )
+                    );
+                  
+                    setHargaUmum(
+                      formatNumber(
+                        Math.round(beli * 1.5).toString()
+                      )
+                    );
+                  }}
                   className="w-full pl-12 pr-4 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
             </div>
-            {/* Harga Beli Luar */}
+            {/* Harga Jual Apotek */}
             <div>
               <label className="block text-sm mb-2">
-                Harga Beli Luar (Apotek)*
+                Harga Jual Apotek *
               </label>
 
               <div className="relative">
@@ -433,10 +449,10 @@ export default function AddItem() {
                   inputMode="numeric"
                   placeholder="0"
 
-                  value={hargaBeliLuar}
+                  value={hargaApotek}
 
                   onChange={(e) =>
-                    setHargaBeliLuar(
+                    setHargaApotek(
                       formatNumber(e.target.value)
                     )
                   }
@@ -504,9 +520,6 @@ export default function AddItem() {
             </div>
           </div>
 
-          {/* Margin Calculation */}
-          <div className="grid grid-cols-2 gap-4">
-
           {/* Berdasarkan Harga Beli */}
           <div className="p-4 rounded-xl bg-success/10 border border-success/20">
 
@@ -530,34 +543,15 @@ export default function AddItem() {
               </span>
             </p>
 
-          </div>
-
-          {/* Berdasarkan Harga Beli Luar */}
-          <div className="p-4 rounded-xl bg-primary/10 border border-primary/20">
-
-            <p className="font-semibold text-primary mb-3">
-              Margin dari Harga Beli Luar
-            </p>
-
-            <p className="text-sm text-primary">
-              Umum:
+            <p className="text-sm text-success">
+              Apotek:
               <span className="font-semibold">
                 {" "}
-                {marginUmumBeliLuar}%
-              </span>
-            </p>
-
-            <p className="text-sm text-primary">
-            Utama (BPJS):
-              <span className="font-semibold">
-                {" "}
-                {marginUtamaBeliLuar}%
+                {marginApotekBeli}%
               </span>
             </p>
 
           </div>
-
-        </div>
 
           {/* Tanggal Expired */}
           {isObat && (
@@ -588,15 +582,24 @@ export default function AddItem() {
               className="flex-1 py-3 px-6 rounded-xl border border-border hover:bg-muted/50 transition-colors"
               onClick={() => {
                 setFormData({
-                  nama_barang: "", barcode: "", golongan: "", jenis: "",
-                  supplier: "", satuan: "", stok: 0,
-                  harga_beli: 0, harga_jual: 0, expired: ""
+                  nama_barang: "",
+                  barcode: "",
+                  golongan: "",
+                  jenis: "",
+                  supplier: "",
+                  satuan: "",
+                  stok: 0,
+                  harga_beli: 0,
+                  harga_umum: 0,
+                  harga_utama: 0,
+                  harga_apotek: 0,
+                  expired: ""
                 });
               
                 setHargaBeli("");
                 setHargaUmum("");
                 setHargaUtama("");
-                setHargaBeliLuar("");
+                setHargaApotek("");
                 setMessage("");
                 window.scrollTo({
                   top: 0,
@@ -620,7 +623,7 @@ export default function AddItem() {
                 !hargaBeli ||
                 !hargaUmum ||
                 !hargaUtama ||
-                !hargaBeliLuar ||
+                !hargaApotek ||
                 Number(formData.stok) <= 0
               }
             >

@@ -213,7 +213,7 @@ export default function Dashboard() {
   const lowStockText = summary?.low_stock_count != null ? summary.low_stock_count.toLocaleString() : "-";
   const expiringText = summary?.expiring_soon_count != null ? summary.expiring_soon_count.toLocaleString() : "-";
   const expiredCountText = expiredCount != null ? expiredCount.toLocaleString() : "-";
-  const inventoryText = summary?.inventory_value != null ? `Rp ${summary.inventory_value.toLocaleString()}` : "-";
+  const inventoryText = summary?.inventory_value != null ? `Rp${summary.inventory_value.toLocaleString()}` : "-";
 
   return (
     <div className="space-y-6">
@@ -411,7 +411,7 @@ export default function Dashboard() {
               <div>
                 <p className="text-sm text-muted-foreground">Nilai Inventory</p>
                 <p className="text-2xl font-semibold mt-1">{inventoryText}</p>
-                <p className="text-xs text-success mt-1">Keuntungan: Rp 52M</p>
+                <p className="text-xs text-success mt-1">Keuntungan: Rp52M</p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-success/10 flex items-center justify-center">
                 <DollarSign className="w-6 h-6 text-success" />
