@@ -10,8 +10,8 @@ import {
   TrendingDown,
   Activity,
   FileText,
-  Bell,
   Building2,
+  Tags,
   Menu,
   X
 } from "lucide-react";
@@ -32,6 +32,7 @@ export function Layout({
     { name: "Barang Masuk", href: "/stock-in", icon: TrendingUp },
     { name: "Barang Keluar", href: "/stock-out", icon: TrendingDown },
     { name: "Monitoring Stok", href: "/monitoring", icon: Activity },
+    { name: "Master Data", href: "/master-data", icon: Tags },
     { name: "Supplier", href: "/supplier", icon: Building2 },
     { name: "Laporan", href: "/reports", icon: FileText },
   ];

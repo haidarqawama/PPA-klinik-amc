@@ -2,99 +2,125 @@
 
 import axios from 'axios'
 import { useEffect, useState } from 'react'
-import { Search, Filter, Plus, Edit, Trash2, Package } from "lucide-react";
+import { Search, Plus, Edit, Trash2, Package } from "lucide-react";
 import Link from 'next/link'
 import { formatDate } from '@/utils/dateFormat';
+import { apiUrl } from '@/lib/api';
 
-const medicineTypes = [
-  {
-    id: "all",
-    name: "Semua",
-    color: "bg-gray-100 text-gray-700"
-  },
-
-  {
-    id: "B 3",
-    name: "B3",
-    color: "bg-yellow-100 text-yellow-700"
-  },
-
-  {
-    id: "BHP",
-    name: "BHP",
-    color: "bg-cyan-100 text-cyan-700"
-  },
-
-  {
-    id: "NARKOTIKA",
-    name: "Narkotika",
-    color: "bg-pink-100 text-pink-700"
-  },
-
-  {
-    id: "OBAT BEBAS",
-    name: "Obat Bebas",
-    color: "bg-green-100 text-green-700"
-  },
-
-  {
-    id: "Non Psiko",
-    name: "Non Psiko",
-    color: "bg-orange-100 text-orange-700"
-  },
-
-  {
-    id: "PARETO",
-    name: "Pareto",
-    color: "bg-blue-100 text-blue-700"
-  },
-
-  {
-    id: "Prekusor",
-    name: "Prekusor",
-    color: "bg-purple-100 text-purple-700"
-  },
-
-  {
-    id: "Psikotropika",
-    name: "Psikotropika",
-    color: "bg-red-100 text-red-700"
-  }
+const categoryColors = [
+  "bg-yellow-100 text-yellow-700",
+  "bg-cyan-100 text-cyan-700",
+  "bg-pink-100 text-pink-700",
+  "bg-green-100 text-green-700",
+  "bg-orange-100 text-orange-700",
+  "bg-blue-100 text-blue-700",
+  "bg-purple-100 text-purple-700",
+  "bg-red-100 text-red-700"
 ];
 
-const itemTypes = [
-  { id: "all", name: "Semua" },
-  { id: "ALKES HABIS PAKAI", name: "Alkes Habis Pakai" },
-  { id: "ALKES NON HABIS PAKAI", name: "Alkes Non Habis Pakai" },
-  { id: "Ampul", name: "Ampul" },
-  { id: "Botol", name: "Botol" },
-  { id: "BOX", name: "Box" },
-  { id: "Elixir", name: "Elixir" },
-  { id: "Infus", name: "Infus" },
-  { id: "LOGISTIK", name: "Logistik" },
-  { id: "OBAT KERAS", name: "Obat Keras" },
-  { id: "OBAT LUAR", name: "Obat Luar" },
-  { id: "OBAT NON ORAL", name: "Obat Non Oral" },
-  { id: "OBAT ORAL", name: "Obat Oral" },
-  { id: "Salep", name: "Salep" },
-  { id: "Suntik", name: "Suntik" },
-  { id: "Syrup", name: "Syrup" },
-  { id: "Tablet", name: "Tablet" }
-];
+type FilterOption = {
+  id: string;
+  name: string;
+  color?: string;
+};
+
+type MasterGolongan = {
+  kode: string;
+  nama: string;
+};
+
+type MasterJenis = {
+  kdjns: string;
+  nama: string;
+};
+
+type InventoryItem = {
+  kode_brng: string;
+  nama_brng: string;
+  barcode?: string;
+  golongan?: string;
+  jenis?: string;
+  stok: number;
+  satuan?: string;
+  supplier?: string;
+  h_beli: number;
+  beliluar?: number;
+  ralan?: number;
+  utama?: number;
+  expire?: string | null;
+};
 
 export default function Inventory() {
-  const [items, setItems] = useState([])
+  const [items, setItems] = useState<InventoryItem[]>([])
+  const [medicineTypes, setMedicineTypes] = useState<FilterOption[]>([
+    { id: "all", name: "Semua", color: "bg-gray-100 text-gray-700" }
+  ]);
+  const [itemTypes, setItemTypes] = useState<FilterOption[]>([
+    { id: "all", name: "Semua" }
+  ]);
   const [deleteConfirmKode, setDeleteConfirmKode] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedType, setSelectedType] = useState("all");
   const [page, setPage] = useState(1)
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
-    fetchItems()
-  }, [page])
+    let ignore = false;
 
-  const [message, setMessage] = useState("");
+    async function loadItems() {
+      try {
+        const response = await axios.get(apiUrl("/api/items"));
+
+        if (!ignore) {
+          setItems(response.data.data || []);
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    async function loadMasters() {
+      try {
+        const response = await axios.get(apiUrl("/api/masters"));
+
+        const golonganOptions = (response.data.golongan || [])
+          .filter((item: MasterGolongan) => item.nama)
+          .map((item: MasterGolongan, index: number) => ({
+            id: item.nama,
+            name: item.nama,
+            color: categoryColors[index % categoryColors.length]
+          }));
+
+        const jenisOptions = (response.data.jenis || [])
+          .filter((item: MasterJenis) => item.nama)
+          .map((item: MasterJenis) => ({
+            id: item.nama,
+            name: item.nama
+          }));
+
+        if (!ignore) {
+          setMedicineTypes([
+            { id: "all", name: "Semua", color: "bg-gray-100 text-gray-700" },
+            ...golonganOptions
+          ]);
+          setItemTypes([
+            { id: "all", name: "Semua" },
+            ...jenisOptions
+          ]);
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    loadItems();
+    loadMasters();
+
+    return () => {
+      ignore = true;
+    };
+  }, [])
 
   const handleDelete = async (
     kodeBrng: string
@@ -127,14 +153,10 @@ export default function Inventory() {
     }
   }
 
-  useEffect(() => {
-    setPage(1)
-  }, [searchQuery, selectedCategory, selectedType])
-
   const fetchItems = async () => {
     try {
       const response = await axios.get(
-        `http://localhost:8080/api/items`
+        apiUrl("/api/items")
       )
 
       setItems(response.data.data || [])
@@ -145,7 +167,11 @@ export default function Inventory() {
 
   const getCategoryBadge = (category: string) => {
     const type = medicineTypes.find(t => t.id === category);
-    return type ? type : medicineTypes[0];
+    return type || {
+      id: category,
+      name: category || "-",
+      color: "bg-gray-100 text-gray-700"
+    };
   };
 
   const formatCurrency = (value: number) => {
@@ -219,7 +245,10 @@ export default function Inventory() {
               type="text"
               placeholder="Cari nama barang atau barcode..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(1);
+              }}
               className="w-full pl-12 pr-4 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
@@ -231,7 +260,10 @@ export default function Inventory() {
               {medicineTypes.map((type) => (
                 <button
                   key={type.id}
-                  onClick={() => setSelectedCategory(type.id)}
+                  onClick={() => {
+                    setSelectedCategory(type.id);
+                    setPage(1);
+                  }}
                   className={`px-4 py-2 rounded-lg text-sm transition-all ${
                     selectedCategory === type.id
                       ? "bg-primary text-primary-foreground shadow-md"
@@ -251,7 +283,10 @@ export default function Inventory() {
             {itemTypes.map((type) => (
               <button
                 key={type.id}
-                onClick={() => setSelectedType(type.id)}
+                onClick={() => {
+                  setSelectedType(type.id);
+                  setPage(1);
+                }}
                 className={`px-4 py-2 rounded-lg text-sm transition-all ${
                   selectedType === type.id
                     ? "bg-primary text-primary-foreground shadow-md"
@@ -295,7 +330,7 @@ export default function Inventory() {
                   Harga Beli
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Harga Beli Luar
+                  Harga Jual Apotek
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Harga Jual Umum
@@ -368,7 +403,7 @@ export default function Inventory() {
                       {formatCurrency(item.utama || 0)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
-                      {formatDate(item.expire)}
+                      {formatDate(item.expire) || undefined}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <div className="flex gap-2">

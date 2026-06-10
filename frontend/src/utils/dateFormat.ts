@@ -1,7 +1,7 @@
 const MIN_EXPIRE_YEAR = 1990;
 const MAX_EXPIRE_YEAR_OFFSET = 15;
 
-export function isValidExpireDate(date?: string): boolean {
+export function isValidExpireDate(date?: string | null): boolean {
   if (!date || date === "0000-00-00") {
     return false;
   }
@@ -18,7 +18,7 @@ export function isValidExpireDate(date?: string): boolean {
 }
 
 export function formatDate(
-  date?: string
+  date?: string | null 
 ) {
 
   if (!isValidExpireDate(date)) {
