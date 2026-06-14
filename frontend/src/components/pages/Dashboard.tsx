@@ -8,41 +8,23 @@ import {
   TrendingUp,
   TrendingDown,
   DollarSign,
-  Activity,
-  ShoppingCart,
   Bell,
   X
 } from "lucide-react";
 import {
   BarChart,
   Bar,
-  XAxis,
-  YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
   PieChart,
   Pie,
   Cell,
-  LineChart,
-  Line,
+  XAxis,
+  YAxis,
   Legend as RechartsLegend
 } from "recharts";
-
-const stockData = [
-  { month: "Jan", masuk: 240, keluar: 180 },
-  { month: "Feb", masuk: 300, keluar: 220 },
-  { month: "Mar", masuk: 280, keluar: 260 },
-  { month: "Apr", masuk: 350, keluar: 290 },
-  { month: "Mei", masuk: 320, keluar: 310 },
-];
-
-const defaultCategoryData = [
-  { name: "Obat Bebas", value: 450, color: "#00B4D8" },
-  { name: "Obat Keras", value: 320, color: "#38A169" },
-  { name: "Psiko Narko", value: 120, color: "#DD6B20" },
-  { name: "Alat Kesehatan", value: 280, color: "#805AD5" },
-];
+import { apiUrl } from "@/lib/api";
 
 interface DashboardSummary {
   total_items: number;
@@ -71,21 +53,25 @@ interface DashboardStockMovement {
   barang_keluar: number;
 }
 
+interface DashboardRecentActivity {
+  id: number;
+  type: "masuk" | "keluar";
+  kode_brng: string;
+  nama_brng: string;
+  qty: number;
+  activity_date: string;
+  activity_time: string;
+  reference_no: string;
+}
+
 interface DashboardResponse {
   summary: DashboardSummary;
   golongan_distribution: DashboardDistribution[];
   location_stock: { location: string; total_stock: number }[];
   stock_movement: DashboardStockMovement[];
+  recent_activities: DashboardRecentActivity[];
   expired_items?: DashboardExpiredItem[];
 }
-
-const recentActivities = [
-  { id: 1, type: "masuk", item: "Paracetamol 500mg", qty: 100, time: "10 menit lalu" },
-  { id: 2, type: "keluar", item: "Amoxicillin 500mg", qty: 50, time: "25 menit lalu" },
-  { id: 3, type: "masuk", item: "Vitamin C", qty: 200, time: "1 jam lalu" },
-  { id: 4, type: "keluar", item: "Betadine Solution", qty: 15, time: "2 jam lalu" },
-  { id: 5, type: "masuk", item: "Sarung Tangan Latex", qty: 500, time: "3 jam lalu" },
-];
 
 const notifications = [
   {
@@ -160,6 +146,7 @@ export default function Dashboard() {
   const [expiredCount, setExpiredCount] = useState<number | null>(null);
   const [distribution, setDistribution] = useState<DashboardDistribution[]>([]);
   const [stockMovement, setStockMovement] = useState<DashboardStockMovement[]>([]);
+  const [recentActivities, setRecentActivities] = useState<DashboardRecentActivity[]>([]);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -168,7 +155,7 @@ export default function Dashboard() {
     async function fetchDashboard() {
       try {
         setLoading(true);
-        const response = await fetch("http://localhost:8080/api/dashboard");
+        const response = await fetch(apiUrl("/api/dashboard"));
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
@@ -178,11 +165,17 @@ export default function Dashboard() {
         setSummary(data.summary);
         setDistribution(data.golongan_distribution || []);
         setStockMovement(data.stock_movement || []);
+        setRecentActivities(data.recent_activities || []);
         setExpiredCount(
           data.summary.expired_count ?? data.expired_items?.length ?? null
         );
         setDashboardError(null);
       } catch (error) {
+        setSummary(null);
+        setDistribution([]);
+        setStockMovement([]);
+        setRecentActivities([]);
+        setExpiredCount(null);
         setDashboardError("Gagal memuat dashboard dari server");
         console.error(error);
       } finally {
@@ -199,15 +192,34 @@ export default function Dashboard() {
         value: Number(item.total_stock),
         color: ["#00B4D8", "#38A169", "#DD6B20", "#805AD5", "#F6AD55", "#4A5568"][index % 6]
       }))
-    : defaultCategoryData;
+    : [];
 
   const stockChartData = stockMovement.length
     ? stockMovement.map((item) => ({
-        month: item.month,
+        month: new Intl.DateTimeFormat("id-ID", {
+          month: "short",
+          year: "numeric"
+        }).format(new Date(`${item.month}-01T00:00:00`)),
         masuk: Number(item.barang_masuk),
         keluar: Number(item.barang_keluar),
       }))
-    : stockData;
+    : [];
+
+  const formatActivityDate = (value: string) => {
+    if (!value) return "-";
+
+    return new Intl.DateTimeFormat("id-ID", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric"
+    }).format(new Date(`${value}T00:00:00`));
+  };
+
+  const formatActivityDateTime = (activity: DashboardRecentActivity) => {
+    const date = formatActivityDate(activity.activity_date);
+
+    return activity.activity_time ? `${date} ${activity.activity_time}` : date;
+  };
 
   const totalStockText = summary?.total_stock != null ? summary.total_stock.toString() : "-";
   const lowStockText = summary?.low_stock_count != null ? summary.low_stock_count.toLocaleString() : "-";
@@ -432,32 +444,58 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={stockChartData}
-                >
-                <RechartsLegend
-                  verticalAlign="bottom"
-                  height={36}
-                  iconType="rect"
-                  iconSize={12}
-                />
-                <Bar
-                  dataKey="masuk"
-                  fill="#00B4D8"
-                  name="Barang Masuk"
-                  radius={[6, 6, 0, 0]}
-                  isAnimationActive={false}
-                />
-                <Bar
-                  dataKey="keluar"
-                  fill="#38A169"
-                  name="Barang Keluar"
-                  radius={[6, 6, 0, 0]}
-                  isAnimationActive={false}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            {stockChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={stockChartData}
+                  >
+                  <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="month" stroke="#718096" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#718096" fontSize={12} tickLine={false} axisLine={false} />
+                  <Tooltip
+                    cursor={{ fill: "rgba(0, 180, 216, 0.08)" }}
+                    formatter={(value, name) => [
+                      Number(value).toLocaleString("id-ID"),
+                      name
+                    ]}
+                    contentStyle={{
+                      backgroundColor: "#ffffff",
+                      border: "1px solid #E2E8F0",
+                      borderRadius: "12px",
+                      padding: "12px"
+                    }}
+                  />
+                  <RechartsLegend
+                    verticalAlign="bottom"
+                    height={36}
+                    iconType="rect"
+                    iconSize={12}
+                    payload={[
+                      { value: "Barang Masuk", type: "rect", color: "#00B4D8" },
+                      { value: "Barang Keluar", type: "rect", color: "#38A169" }
+                    ]}
+                  />
+                  <Bar
+                    dataKey="masuk"
+                    fill="#00B4D8"
+                    name="Barang Masuk"
+                    radius={[6, 6, 0, 0]}
+                    isAnimationActive={false}
+                  />
+                  <Bar
+                    dataKey="keluar"
+                    fill="#38A169"
+                    name="Barang Keluar"
+                    radius={[6, 6, 0, 0]}
+                    isAnimationActive={false}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted-foreground">
+                Belum ada data pergerakan stok
+              </div>
+            )}
           </div>
         </div>
 
@@ -467,39 +505,45 @@ export default function Dashboard() {
             <h3 className="text-base font-semibold">Distribusi Golongan Barang</h3>
             <p className="text-sm text-muted-foreground">Berdasarkan jumlah item</p>
           </div>
-          <ResponsiveContainer width="100%" height={280}>
-            <PieChart>
-              <Pie
-                data={categoryData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ percent }) =>
-                  `${((percent ?? 0) * 100).toFixed(0)}%`
-                }
-                outerRadius={90}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {categoryData.map((entry) => (
-                  <Cell key={`pie-cell-${entry.name}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "#ffffff",
-                  border: "1px solid #E2E8F0",
-                  borderRadius: "12px",
-                  padding: "12px"
-                }}
-              />
-              <RechartsLegend
-                verticalAlign="bottom"
-                height={36}
-                iconType="circle"
-              />
-            </PieChart>
-          </ResponsiveContainer>
+          {categoryData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={280}>
+              <PieChart>
+                <Pie
+                  data={categoryData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ percent }) =>
+                    `${((percent ?? 0) * 100).toFixed(0)}%`
+                  }
+                  outerRadius={90}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {categoryData.map((entry) => (
+                    <Cell key={`pie-cell-${entry.name}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "#ffffff",
+                    border: "1px solid #E2E8F0",
+                    borderRadius: "12px",
+                    padding: "12px"
+                  }}
+                />
+                <RechartsLegend
+                  verticalAlign="bottom"
+                  height={36}
+                  iconType="circle"
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex h-[280px] items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted-foreground">
+              Belum ada data distribusi golongan barang
+            </div>
+          )}
         </div>
       </div>
 
@@ -510,8 +554,9 @@ export default function Dashboard() {
           <p className="text-sm text-muted-foreground">Riwayat barang masuk dan keluar hari ini</p>
         </div>
         <div className="divide-y divide-border">
-          {recentActivities.map((activity) => (
-            <div key={activity.id} className="p-4 hover:bg-muted/30 transition-colors">
+          {recentActivities.length > 0 ? (
+            recentActivities.map((activity, index) => (
+            <div key={`${activity.type}-${activity.reference_no}-${activity.kode_brng}-${index}`} className="p-4 hover:bg-muted/30 transition-colors">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
@@ -526,18 +571,23 @@ export default function Dashboard() {
                     )}
                   </div>
                   <div>
-                    <p className="font-medium text-foreground">{activity.item}</p>
+                    <p className="font-medium text-foreground">{activity.nama_brng}</p>
                     <p className="text-sm text-muted-foreground">
-                      {activity.type === "masuk" ? "Barang Masuk" : "Barang Keluar"} • {activity.qty} unit
+                      {activity.type === "masuk" ? "Barang Masuk" : "Barang Keluar"} - {activity.qty.toLocaleString()} unit
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <span className="text-sm text-muted-foreground">{activity.time}</span>
+                    <span className="text-sm text-muted-foreground">{formatActivityDateTime(activity)}</span>
                 </div>
               </div>
             </div>
-          ))}
+            ))
+          ) : (
+            <div className="p-8 text-center text-sm text-muted-foreground">
+              Belum ada aktivitas transaksi dari database Khanza
+            </div>
+          )}
         </div>
       </div>
     </div>

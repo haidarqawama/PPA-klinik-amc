@@ -317,7 +317,7 @@ export default function Inventory() {
                 <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Golongan
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <th className="px-6 py-4 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Jenis
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
@@ -341,7 +341,7 @@ export default function Inventory() {
                 <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Expired
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <th className="px-6 py-4 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Aksi
                 </th>
               </tr>

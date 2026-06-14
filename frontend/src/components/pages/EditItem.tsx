@@ -3,7 +3,54 @@
 import axios from "axios";
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Package, Barcode, DollarSign, Calendar, Building2, Hash, ArrowLeft } from "lucide-react";
+import { Package, Barcode, Calendar, Hash, ArrowLeft } from "lucide-react";
+import { apiUrl } from "@/lib/api";
+
+type MasterSatuan = {
+  kode_sat: string;
+  satuan: string;
+};
+
+type MasterJenis = {
+  kdjns: string;
+  nama: string;
+};
+
+type MasterGolongan = {
+  kode: string;
+  nama: string;
+};
+
+type MasterSupplier = {
+  kode_industri: string;
+  nama_industri: string;
+};
+
+type Masters = {
+  satuan: MasterSatuan[];
+  jenis: MasterJenis[];
+  golongan: MasterGolongan[];
+  suppliers: MasterSupplier[];
+};
+
+const formatNumber = (value: string) => {
+  const number = value.replace(/[^\d]/g, "");
+
+  if (!number) return "";
+
+  return number.replace(
+    /\B(?=(\d{3})+(?!\d))/g,
+    "."
+  );
+};
+
+const formatStock = (value: string) => {
+  const number = value.replace(/[^\d]/g, "");
+
+  if (!number) return "";
+
+  return number.replace(/^0+(?=\d)/, "");
+};
 
 export default function EditItem() {
   const router = useRouter();
@@ -11,7 +58,7 @@ export default function EditItem() {
   const kodeBrng = params.kodeBrng as string;
 
   const [hargaBeli, setHargaBeli] = useState("");
-  const [hargaBeliLuar, setHargaBeliLuar] = useState("");
+  const [hargaApotek, setHargaApotek] = useState("");
   const [hargaUmum, setHargaUmum] = useState("");
   const [hargaUtama, setHargaUtama] = useState("");
 
@@ -22,54 +69,83 @@ export default function EditItem() {
   const [kategori, setKategori] = useState("");
   const [supplier, setSupplier] = useState("");
   const [satuan, setSatuan] = useState("");
-  const [stok, setStok] = useState(0);
+  const [stok, setStok] = useState("");
   const [expired, setExpired] = useState("");
   const [message, setMessage] = useState("");
+  const [masters, setMasters] = useState<Masters>({
+    satuan: [],
+    jenis: [],
+    golongan: [],
+    suppliers: [],
+  });
 
   useEffect(() => {
-    fetch("http://localhost:8080/api/masters")
-      .then((r) => r.json())
-      .then((data) => {
+    let ignore = false;
+
+    async function loadMasters() {
+      try {
+        const response = await fetch(apiUrl("/api/masters"));
+        const data = await response.json();
+
+        if (ignore) return;
+
         setMasters({
           satuan: data.satuan || [],
           jenis: data.jenis || [],
           golongan: data.golongan || [],
           suppliers: data.suppliers || [],
         });
-      });
-  }, []);
-  
-  const fetchItem = async () => {
-    try {
-      const response = await axios.get(
-        `http://localhost:8080/api/items/${kodeBrng}`
-      );
-      const item = response.data.data;
-
-      setNamaBarang(item.nama_brng || "");
-      setSatuan(item.kode_sat || "");
-      setKategori(item.kdjns || "");
-      setSupplier(item.kode_industri || "");
-      setBarcode(item.barcode || "");
-      setGolongan(item.kode_golongan || "");
-      setStok(item.stok || 0);
-      setHargaBeli(formatNumber(String(item.h_beli || 0)));
-      setHargaBeliLuar(formatNumber(String(item.beliluar || 0)));
-      setHargaUmum(formatNumber(String(item.ralan || 0)));
-      setHargaUtama(formatNumber(String(item.utama || 0)));
-  
-      if (item.expire && item.expire !== "0000-00-00") {
-        setExpired(item.expire.substring(0, 10));
+      } catch (error) {
+        console.error(error);
       }
-    } catch (err) {
-      console.error(err);
     }
-  };
+
+    loadMasters();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   useEffect(() => {
-    if (kodeBrng) {
-      fetchItem();
+    let ignore = false;
+
+    async function loadItem() {
+      if (!kodeBrng) return;
+
+      try {
+        const response = await axios.get(
+          apiUrl(`/api/items/${kodeBrng}`)
+        );
+        const item = response.data.data;
+
+        if (ignore) return;
+
+        setNamaBarang(item.nama_brng || "");
+        setSatuan(item.kode_sat || "");
+        setKategori(item.kdjns || "");
+        setSupplier(item.kode_industri || "");
+        setBarcode(item.barcode || "");
+        setGolongan(item.kode_golongan || "");
+        setStok(String(Number(item.stok || 0)));
+        setHargaBeli(formatNumber(String(item.h_beli || 0)));
+        setHargaApotek(formatNumber(String(item.beliluar || 0)));
+        setHargaUmum(formatNumber(String(item.ralan || 0)));
+        setHargaUtama(formatNumber(String(item.utama || 0)));
+
+        if (item.expire && item.expire !== "0000-00-00") {
+          setExpired(item.expire.substring(0, 10));
+        }
+      } catch (err) {
+        console.error(err);
+      }
     }
+
+    loadItem();
+
+    return () => {
+      ignore = true;
+    };
   }, [kodeBrng]);
 
   const handleSubmit = async (
@@ -79,7 +155,7 @@ export default function EditItem() {
   
     try {
         await axios.put(
-          `http://localhost:8080/api/items/${kodeBrng}`,
+          apiUrl(`/api/items/${kodeBrng}`),
           {
             nama_barang: namaBarang,
             barcode,
@@ -87,11 +163,11 @@ export default function EditItem() {
             satuan,
             golongan,
             jenis: kategori,
-            stok,
+            stok: Number(stok || 0),
             harga_beli: Number(String(hargaBeli).replace(/\./g, "")),
             harga_umum: Number(String(hargaUmum).replace(/\./g, "")),
             harga_utama: Number(String(hargaUtama).replace(/\./g, "")),
-            harga_beli_luar: Number(String(hargaBeliLuar).replace(/\./g, "")),
+            harga_beli_luar: Number(String(hargaApotek).replace(/\./g, "")),
             expired: expired ? `${expired}T00:00:00Z`: null,
           }
         );
@@ -120,9 +196,9 @@ export default function EditItem() {
         .replace(/\./g, "") || 0
     );
 
-    const beliLuar =
+    const apotek =
     Number(
-        String(hargaBeliLuar)
+        String(hargaApotek)
         .replace(/\./g, "") || 0
     );
 
@@ -153,38 +229,12 @@ export default function EditItem() {
             ).toFixed(1)
         : "0";
 
-    // BERDASARKAN HARGA BELI LUAR
-    const marginUmumBeliLuar =
-        beliLuar > 0
+    const marginApotekBeli =
+        beli > 0
         ? (
-            ((umum - beliLuar) / beliLuar) * 100
+            ((apotek - beli) / beli) * 100
             ).toFixed(1)
         : "0";
-
-    const marginUtamaBeliLuar =
-        beliLuar > 0
-        ? (
-            ((utama - beliLuar) / beliLuar) * 100
-            ).toFixed(1)
-        : "0";
-
-    const [masters, setMasters] = useState({
-        satuan: [],
-        jenis: [],
-        golongan: [],
-        suppliers: [],
-    });
-
-    const formatNumber = (value: string) => {
-        const number = value.replace(/[^\d]/g, "");
-        
-        if (!number) return "";
-        
-        return number.replace(
-            /\B(?=(\d{3})+(?!\d))/g,
-            "."
-        );
-    };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -290,7 +340,7 @@ export default function EditItem() {
                 >
                 <option value="">Pilih golongan</option>
 
-                {masters.golongan.map((item: any) => (
+                {masters.golongan.map((item) => (
                     <option
                     key={item.kode}
                     value={item.kode}
@@ -312,7 +362,7 @@ export default function EditItem() {
             >
             <option value="">Pilih jenis</option>
 
-            {masters.jenis.map((item: any) => (
+            {masters.jenis.map((item) => (
                 <option
                 key={item.kdjns}
                 value={item.kdjns}
@@ -339,7 +389,7 @@ export default function EditItem() {
                 Pilih supplier
               </option>
 
-              {masters.suppliers?.map((item:any)=>(
+              {masters.suppliers?.map((item)=>(
                 <option
                   key={item.kode_industri}
 
@@ -363,7 +413,7 @@ export default function EditItem() {
                 >
                 <option value="">Pilih satuan</option>
 
-                {masters.satuan.map((item: any) => (
+                {masters.satuan.map((item) => (
                     <option
                     key={item.kode_sat}
                     value={item.kode_sat}
@@ -378,9 +428,10 @@ export default function EditItem() {
               <div className="relative">
                 <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   value={stok}
-                  onChange={(e) => setStok(Number(e.target.value))}
+                  onChange={(e) => setStok(formatStock(e.target.value))}
                   placeholder="0"
                   className="w-full pl-12 pr-4 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
                 />
@@ -399,15 +450,23 @@ export default function EditItem() {
                   inputMode="numeric"
                   placeholder="0"
                   value={hargaBeli}
-                  onChange={(e) => setHargaBeli(formatNumber(e.target.value))}
+                  onChange={(e) => {
+                    const value = formatNumber(e.target.value);
+                    const beli = Number(value.replace(/\./g, ""));
+
+                    setHargaBeli(value);
+                    setHargaUtama(formatNumber(Math.round(beli * 1.1).toString()));
+                    setHargaApotek(formatNumber(Math.round(beli * 1.3).toString()));
+                    setHargaUmum(formatNumber(Math.round(beli * 1.5).toString()));
+                  }}
                   className="w-full pl-12 pr-4 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
             </div>
-            {/* Harga Beli Luar */}
+            {/* Harga Jual Apotek */}
             <div>
               <label className="block text-sm mb-2">
-                Harga Beli Luar (Apotek)*
+                Harga Jual Apotek *
               </label>
 
               <div className="relative">
@@ -420,10 +479,10 @@ export default function EditItem() {
                   inputMode="numeric"
                   placeholder="0"
 
-                  value={hargaBeliLuar}
+                  value={hargaApotek}
 
                   onChange={(e) =>
-                    setHargaBeliLuar(
+                    setHargaApotek(
                       formatNumber(e.target.value)
                     )
                   }
@@ -491,9 +550,6 @@ export default function EditItem() {
             </div>
           </div>
 
-          {/* Margin Calculation */}
-          <div className="grid grid-cols-2 gap-4">
-
           {/* Berdasarkan Harga Beli */}
           <div className="p-4 rounded-xl bg-success/10 border border-success/20">
 
@@ -517,34 +573,15 @@ export default function EditItem() {
               </span>
             </p>
 
-          </div>
-
-          {/* Berdasarkan Harga Beli Luar */}
-          <div className="p-4 rounded-xl bg-primary/10 border border-primary/20">
-
-            <p className="font-semibold text-primary mb-3">
-              Margin dari Harga Beli Luar
-            </p>
-
-            <p className="text-sm text-primary">
-              Umum:
+            <p className="text-sm text-success">
+              Apotek:
               <span className="font-semibold">
                 {" "}
-                {marginUmumBeliLuar}%
-              </span>
-            </p>
-
-            <p className="text-sm text-primary">
-            Utama (BPJS):
-              <span className="font-semibold">
-                {" "}
-                {marginUtamaBeliLuar}%
+                {marginApotekBeli}%
               </span>
             </p>
 
           </div>
-
-        </div>
 
           {/* Tanggal Expired */}
           {isObat && (

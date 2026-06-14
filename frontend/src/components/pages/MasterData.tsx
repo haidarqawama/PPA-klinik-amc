@@ -119,7 +119,16 @@ export default function MasterData() {
 
   const filteredRecords = useMemo(() => {
     const keyword = searchQuery.trim().toLowerCase();
-    const list = records[activeType] || [];
+    let list = [...(records[activeType] || [])];
+
+    // Urutkan berdasarkan kode
+    list.sort((a, b) =>
+      a.code.localeCompare(
+        b.code,
+        undefined,
+        { numeric: true }
+      )
+    );
 
     if (!keyword) return list;
 
@@ -315,20 +324,25 @@ export default function MasterData() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-muted/30 border-b border-border">
-              <tr>
-                <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  {activeConfig.codeLabel}
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  {activeConfig.nameLabel}
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Aksi
-                </th>
-              </tr>
-            </thead>
+          <table className="w-full table-fixed">
+          <colgroup>
+            <col style={{ width: "220px" }} />
+            <col />
+            <col style={{ width: "120px" }} />
+          </colgroup>
+          <thead className="bg-muted/30 border-b border-border">
+            <tr>
+              <th className="w-[200px] px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                {activeConfig.codeLabel}
+              </th>
+              <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                {activeConfig.nameLabel}
+              </th>
+              <th className="w-[120px] px-6 py-4 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Aksi
+              </th>
+            </tr>
+          </thead>
             <tbody className="divide-y divide-border">
               {loading ? (
                 <tr>
@@ -345,14 +359,18 @@ export default function MasterData() {
               ) : (
                 filteredRecords.map((record) => (
                   <tr key={record.code} className="hover:bg-muted/20 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="font-mono text-sm font-medium text-foreground">{record.code}</span>
+                    <td className="w-[200px] px-6 py-4 whitespace-nowrap">
+                      <span className="font-mono text-sm font-medium text-foreground">
+                        {record.code}
+                      </span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-sm text-foreground">{record.name}</span>
+                      <span className="text-sm text-foreground">
+                        {record.name}
+                      </span>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex gap-2">
+                    <td className="w-[120px] px-6 py-4">
+                      <div className="flex justify-center gap-2">
                         <button
                           onClick={() => openEdit(record)}
                           className="p-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
