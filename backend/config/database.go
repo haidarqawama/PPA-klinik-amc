@@ -47,7 +47,40 @@ func ConnectDatabase() {
 		)
 	}
 
+	ensureIndex(
+		"riwayat_barang_medis",
+		"idx_rbm_dashboard_recent",
+		"CREATE INDEX idx_rbm_dashboard_recent ON riwayat_barang_medis (kd_bangsal, tanggal, jam)",
+	)
+
 	fmt.Println(
 		"Database connected",
 	)
+}
+
+func ensureIndex(tableName string, indexName string, createSQL string) {
+	var total int64
+
+	err := SIK.
+		Raw(`
+			SELECT COUNT(1)
+			FROM information_schema.statistics
+			WHERE table_schema = DATABASE()
+				AND table_name = ?
+				AND index_name = ?
+		`, tableName, indexName).
+		Scan(&total).Error
+
+	if err != nil {
+		fmt.Println("Check index error:", err)
+		return
+	}
+
+	if total > 0 {
+		return
+	}
+
+	if err := SIK.Exec(createSQL).Error; err != nil {
+		fmt.Println("Create index error:", err)
+	}
 }

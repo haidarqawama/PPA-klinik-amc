@@ -26,9 +26,21 @@ type DashboardStockMovement struct {
 	BarangKeluar int64  `json:"barang_keluar"`
 }
 
+type DashboardRecentActivity struct {
+	ID           int64  `json:"id"`
+	Type         string `json:"type" gorm:"column:activity_type"`
+	KodeBrng     string `json:"kode_brng" gorm:"column:kode_brng"`
+	NamaBrng     string `json:"nama_brng" gorm:"column:nama_brng"`
+	Qty          int64  `json:"qty" gorm:"column:qty"`
+	ActivityDate string `json:"activity_date" gorm:"column:activity_date"`
+	ActivityTime string `json:"activity_time" gorm:"column:activity_time"`
+	ReferenceNo  string `json:"reference_no" gorm:"column:reference_no"`
+}
+
 type DashboardResponse struct {
-	Summary              DashboardSummary         `json:"summary"`
-	GolonganDistribution []DashboardDistribution  `json:"golongan_distribution"`
-	LocationStock        []DashboardLocation      `json:"location_stock"`
-	StockMovement        []DashboardStockMovement `json:"stock_movement"`
+	Summary              DashboardSummary          `json:"summary"`
+	GolonganDistribution []DashboardDistribution   `json:"golongan_distribution"`
+	LocationStock        []DashboardLocation       `json:"location_stock"`
+	StockMovement        []DashboardStockMovement  `json:"stock_movement"`
+	RecentActivities     []DashboardRecentActivity `json:"recent_activities"`
 }
