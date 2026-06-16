@@ -1,8 +1,11 @@
 import { useState } from "react";
 import { Search, Plus, Edit, Trash2, Building2, X, Phone, MapPin, Map } from "lucide-react";
 import { useEffect } from "react";
+import { apiUrl } from "@/lib/api";
 
 interface Supplier {
+  kode_industri: any;
+  kode_supplier: any;
   id: number;
   nama_industri: string;
   alamat: string;
@@ -31,10 +34,7 @@ export default function Supplier() {
   
     try {
   
-      const res =
-        await fetch(
-          "http://localhost:8080/api/suppliers"
-        );
+      const res = await fetch(apiUrl("/api/suppliers"));
   
       const data =
         await res.json();
@@ -90,8 +90,8 @@ export default function Supplier() {
   
       const url =
         editingId !== null
-          ? `http://localhost:8080/api/suppliers/${editingId}`
-          : "http://localhost:8080/api/suppliers";
+          ? apiUrl(`/api/suppliers/${editingId}`)
+          : apiUrl("/api/suppliers");
   
       const method =
         editingId !== null
@@ -129,28 +129,17 @@ export default function Supplier() {
   };
 
   const handleDelete = async (
-    id:number
+    id: number
   ) => {
-  
     try {
-  
-      await fetch(
-        `http://localhost:8080/api/suppliers/${id}`,
-        {
-          method:"DELETE"
-        }
-      );
-  
+      await fetch(apiUrl(`/api/suppliers/${id}`), {
+        method: "DELETE",
+      });
       await fetchSuppliers();
-  
       setDeleteConfirmId(null);
-  
     } catch (err) {
-  
       console.error(err);
-  
     }
-  
   };
 
   const handleSearch = (val: string) => {

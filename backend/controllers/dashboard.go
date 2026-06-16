@@ -87,102 +87,63 @@ func GetDashboard(c *gin.Context) {
 	}
 
 	if err := config.SIK.Raw(`
-        SELECT
-            DATE_FORMAT(DATE_SUB(anchor.latest_month, INTERVAL month_offsets.month_offset MONTH), '%Y-%m') AS month,
-            CAST(COALESCE(movement.barang_masuk, 0) AS SIGNED) AS barang_masuk,
-            CAST(COALESCE(movement.barang_keluar, 0) AS SIGNED) AS barang_keluar
+        SELECT *
         FROM (
-            SELECT COALESCE(MAX(tanggal), CURDATE()) AS latest_month
+            SELECT
+                DATE_FORMAT(tanggal, '%Y-%m') AS month,
+                SUM(masuk) AS barang_masuk,
+                SUM(keluar) AS barang_keluar
             FROM riwayat_barang_medis
             WHERE tanggal IS NOT NULL
-                AND (
-                    masuk > 0
-                    OR keluar > 0
-                )
-                AND (
-                    kd_bangsal = 'AP'
-                    OR kd_bangsal IS NULL
-                    OR kd_bangsal = ''
-                )
-        ) anchor
-        JOIN (
-            SELECT 4 AS month_offset
-            UNION ALL SELECT 3
-            UNION ALL SELECT 2
-            UNION ALL SELECT 1
-            UNION ALL SELECT 0
-        ) month_offsets
-        LEFT JOIN (
-            SELECT
-                DATE_FORMAT(riwayat_barang_medis.tanggal, '%Y-%m') AS month,
-                COALESCE(SUM(riwayat_barang_medis.masuk), 0) AS barang_masuk,
-                COALESCE(SUM(riwayat_barang_medis.keluar), 0) AS barang_keluar
-            FROM riwayat_barang_medis
-            WHERE riwayat_barang_medis.tanggal IS NOT NULL
-                AND riwayat_barang_medis.tanggal >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 4 MONTH), '%Y-%m-01')
-                AND (
-                    riwayat_barang_medis.kd_bangsal = 'AP'
-                    OR riwayat_barang_medis.kd_bangsal IS NULL
-                    OR riwayat_barang_medis.kd_bangsal = ''
-                )
-            GROUP BY DATE_FORMAT(riwayat_barang_medis.tanggal, '%Y-%m')
-        ) movement
-            ON DATE_FORMAT(DATE_SUB(anchor.latest_month, INTERVAL month_offsets.month_offset MONTH), '%Y-%m') = movement.month
-        ORDER BY month_offsets.month_offset DESC
+            GROUP BY YEAR(tanggal), MONTH(tanggal)
+            ORDER BY YEAR(tanggal) DESC, MONTH(tanggal) DESC
+            LIMIT 5
+        ) recent_months
+        ORDER BY month ASC
     `).Scan(&stockMovement).Error; err != nil {
-		c.JSON(500, gin.H{"error": "Gagal mengambil pergerakan stok", "detail": err.Error()})
-		return
-	}
+        c.JSON(500, gin.H{
+            "error": "Gagal mengambil pergerakan stok",
+            "detail": err.Error(),
+        })
+        return
+    }
 
 	if err := config.SIK.Raw(`
         SELECT
             0 AS id,
             CASE
-                WHEN COALESCE(recent.masuk, 0) > 0 THEN 'masuk'
+                WHEN COALESCE(r.masuk, 0) > 0 THEN 'masuk'
                 ELSE 'keluar'
             END AS activity_type,
-            recent.kode_brng,
-            COALESCE(databarang.nama_brng, recent.kode_brng) AS nama_brng,
+            r.kode_brng,
+            COALESCE(databarang.nama_brng, r.kode_brng) AS nama_brng,
             CAST(
                 CASE
-                    WHEN COALESCE(recent.masuk, 0) > 0 THEN COALESCE(recent.masuk, 0)
-                    ELSE COALESCE(recent.keluar, 0)
+                    WHEN COALESCE(r.masuk, 0) > 0 THEN COALESCE(r.masuk, 0)
+                    ELSE COALESCE(r.keluar, 0)
                 END
                 AS SIGNED
             ) AS qty,
-            DATE_FORMAT(recent.tanggal, '%Y-%m-%d') AS activity_date,
-            IFNULL(TIME_FORMAT(recent.jam, '%H:%i:%s'), '') AS activity_time,
+            DATE_FORMAT(r.tanggal, '%Y-%m-%d') AS activity_date,
+            IFNULL(TIME_FORMAT(r.jam, '%H:%i:%s'), '') AS activity_time,
             COALESCE(
-                NULLIF(recent.no_faktur, ''),
-                NULLIF(recent.no_batch, ''),
-                NULLIF(recent.keterangan, ''),
-                recent.posisi,
+                NULLIF(r.no_faktur, ''),
+                NULLIF(r.no_batch, ''),
+                NULLIF(r.keterangan, ''),
+                r.posisi,
                 ''
             ) AS reference_no
-        FROM (
-            SELECT
-                kode_brng,
-                masuk,
-                keluar,
-                tanggal,
-                jam,
-                no_faktur,
-                no_batch,
-                keterangan,
-                posisi
-            FROM riwayat_barang_medis
-            WHERE tanggal IS NOT NULL
-                AND (
-                    masuk > 0
-                    OR keluar > 0
-                )
-                AND kd_bangsal = 'AP'
-            ORDER BY tanggal DESC, jam DESC
-            LIMIT 10
-        ) recent
+        FROM riwayat_barang_medis r
         LEFT JOIN databarang
-            ON recent.kode_brng = databarang.kode_brng
-        ORDER BY recent.tanggal DESC, recent.jam DESC
+            ON r.kode_brng = databarang.kode_brng
+        WHERE r.kd_bangsal = 'AP'
+            AND r.tanggal = CURDATE()
+            AND (
+                r.masuk > 0
+                OR r.keluar > 0
+            )
+        ORDER BY r.tanggal DESC, r.jam DESC
+        LIMIT 10
     `).Scan(&recentActivities).Error; err != nil {
 		c.JSON(500, gin.H{"error": "Gagal mengambil aktivitas transaksi terbaru", "detail": err.Error()})
 		return

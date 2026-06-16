@@ -158,9 +158,50 @@ export default function MasterData() {
     });
   };
 
+  const generateNextCode = (type: MasterType) => {
+    const list = records[type] || [];
+  
+    if (list.length === 0) {
+      if (type === "golongan") return "G01";
+      if (type === "jenis") return "J001";
+      return "";
+    }
+  
+    const lastCode = [...list]
+      .sort((a, b) =>
+        a.code.localeCompare(
+          b.code,
+          undefined,
+          { numeric: true }
+        )
+      )
+      .pop()?.code || "";
+  
+    const number =
+      parseInt(lastCode.replace(/\D/g, "")) + 1;
+  
+    if (type === "golongan") {
+      return `G${String(number).padStart(2, "0")}`;
+    }
+  
+    if (type === "jenis") {
+      return `J${String(number).padStart(3, "0")}`;
+    }
+  
+    return "";
+  };
+
   const openAdd = () => {
     setEditingRecord(null);
-    setForm(emptyForm);
+  
+    setForm({
+      code:
+        activeType === "satuan"
+          ? ""
+          : generateNextCode(activeType),
+      name: "",
+    });
+  
     setShowModal(true);
   };
 
@@ -182,7 +223,7 @@ export default function MasterData() {
   };
 
   const handleSave = async () => {
-    if (!form.code.trim() || !form.name.trim()) return;
+    if (!form.name.trim()) return;
 
     try {
       const isEditing = editingRecord !== null;
@@ -419,7 +460,11 @@ export default function MasterData() {
                 <input
                   type="text"
                   value={form.code}
-                  disabled={editingRecord !== null}
+                  disabled={
+                    !editingRecord &&
+                    (activeType === "golongan" ||
+                      activeType === "jenis")
+                  }
                   onChange={(event) => setForm((prev) => ({ ...prev, code: event.target.value }))}
                   className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-sm disabled:opacity-60"
                 />

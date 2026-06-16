@@ -221,11 +221,11 @@ export default function Dashboard() {
     return activity.activity_time ? `${date} ${activity.activity_time}` : date;
   };
 
-  const totalStockText = summary?.total_stock != null ? summary.total_stock.toString() : "-";
+  const totalStockText = summary?.total_stock != null ? Number(summary.total_stock).toLocaleString("id-ID") : "-";
   const lowStockText = summary?.low_stock_count != null ? summary.low_stock_count.toLocaleString() : "-";
   const expiringText = summary?.expiring_soon_count != null ? summary.expiring_soon_count.toLocaleString() : "-";
   const expiredCountText = expiredCount != null ? expiredCount.toLocaleString() : "-";
-  const inventoryText = summary?.inventory_value != null ? `Rp${summary.inventory_value.toLocaleString()}` : "-";
+  const inventoryText = summary?.inventory_value != null ? `Rp${summary.inventory_value.toLocaleString("id-ID")}` : "-";
 
   return (
     <div className="space-y-6">
@@ -445,7 +445,7 @@ export default function Dashboard() {
           </div>
           <div className="h-[280px]">
             {stockChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height={280}>
                 <BarChart
                   data={stockChartData}
                   >
@@ -470,10 +470,6 @@ export default function Dashboard() {
                     height={36}
                     iconType="rect"
                     iconSize={12}
-                    payload={[
-                      { value: "Barang Masuk", type: "rect", color: "#00B4D8" },
-                      { value: "Barang Keluar", type: "rect", color: "#38A169" }
-                    ]}
                   />
                   <Bar
                     dataKey="masuk"
@@ -525,6 +521,9 @@ export default function Dashboard() {
                   ))}
                 </Pie>
                 <Tooltip
+                  formatter={(value) =>
+                    Number(value).toLocaleString("id-ID")
+                  }
                   contentStyle={{
                     backgroundColor: "#ffffff",
                     border: "1px solid #E2E8F0",
@@ -585,7 +584,7 @@ export default function Dashboard() {
             ))
           ) : (
             <div className="p-8 text-center text-sm text-muted-foreground">
-              Belum ada aktivitas transaksi dari database Khanza
+              Belum ada aktivitas transaksi hari ini
             </div>
           )}
         </div>

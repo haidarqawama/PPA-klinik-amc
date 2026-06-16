@@ -22,4 +22,5 @@ func SetupRoutes(r *gin.Engine) {
 	r.DELETE("/api/items/:kodeBrng", controllers.DeleteItem)
 	r.GET("/api/dashboard", controllers.GetDashboard)
 	r.GET("/api/monitoring-stock", controllers.GetMonitoringStock)
+	r.GET("/api/monitoring-stock/details", controllers.GetMonitoringStockDetails)
 }

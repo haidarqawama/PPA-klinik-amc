@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Package, Barcode, DollarSign, Calendar, Building2, Hash } from "lucide-react";
+import { apiUrl } from "@/lib/api";
 
 export default function AddItem() {
   const [isObat, setIsObat] = useState(true);
@@ -81,9 +82,7 @@ export default function AddItem() {
 
   useEffect(() => {
 
-    fetch(
-      "http://localhost:8080/api/masters"
-    )
+    fetch(apiUrl("/api/masters"))
       .then((r) => r.json())
   
       .then((data) => {
@@ -125,7 +124,7 @@ export default function AddItem() {
     try {
       setLoading(true);
   
-      const res = await fetch("http://localhost:8080/api/items", {
+      const res = await fetch(apiUrl("/api/items"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -299,7 +299,7 @@ export default function MonitoringStock() {
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Monitoring Stok Real-Time</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Pantau kondisi stok dan status barang (stok dari gudang AP, sama seperti Data Barang)
+            Pantau kondisi stok dan status barang
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -395,7 +395,7 @@ export default function MonitoringStock() {
 
       <div className="bg-card rounded-2xl border border-border shadow-sm p-6">
         <h3 className="text-base font-semibold mb-1">Statistik per Golongan Obat</h3>
-        <p className="text-sm text-muted-foreground mb-6">Total stok per golongan dari gudang AP</p>
+        <p className="text-sm text-muted-foreground mb-6">Total stok per golongan</p>
         {golonganStats.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">Tidak ada data golongan</p>
         ) : (

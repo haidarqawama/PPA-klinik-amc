@@ -128,9 +128,7 @@ export default function Inventory() {
   
     try {
 
-      await axios.delete(
-        `http://localhost:8080/api/items/${kodeBrng}`
-      );
+      await axios.delete(apiUrl(`/api/items/${kodeBrng}`));
       
       setDeleteConfirmKode(null);
       setMessage("✅ Barang berhasil dihapus");

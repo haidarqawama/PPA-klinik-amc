@@ -22,8 +22,8 @@ type DashboardLocation struct {
 
 type DashboardStockMovement struct {
 	Month        string `json:"month"`
-	BarangMasuk  int64  `json:"barang_masuk"`
-	BarangKeluar int64  `json:"barang_keluar"`
+	BarangMasuk  float64  `json:"barang_masuk"`
+	BarangKeluar float64  `json:"barang_keluar"`
 }
 
 type DashboardRecentActivity struct {
