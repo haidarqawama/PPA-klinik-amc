@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Calendar, Package, Clock, Activity, RefreshCw } from "lucide-react";
+import { AlertTriangle, Calendar, Package, Clock, Activity, RefreshCw, X, Search } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { formatDate, isValidExpireDate } from '@/utils/dateFormat';
 import { apiUrl } from '@/lib/api';
@@ -155,6 +155,36 @@ export default function MonitoringStock() {
   const [showAllLowStock, setShowAllLowStock] = useState(false);
   const [showAllExpiring, setShowAllExpiring] = useState(false);
 
+  const [activeDetailType, setActiveDetailType] = useState<"critical" | "restock" | "expiring_soon" | "expired" | null>(null);
+  const [detailItems, setDetailItems] = useState<any[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailSearchQuery, setDetailSearchQuery] = useState("");
+  const [detailCurrentPage, setDetailCurrentPage] = useState(1);
+
+  const openDetailModal = async (type: "critical" | "restock" | "expiring_soon" | "expired") => {
+    setActiveDetailType(type);
+    setDetailLoading(true);
+    setDetailSearchQuery("");
+    setDetailCurrentPage(1);
+    try {
+      const response = await fetch(apiUrl(`/api/monitoring-stock/details?type=${type}`), { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error("Gagal mengambil data detail");
+      }
+      const body = await response.json();
+      setDetailItems(body.data || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const closeDetailModal = () => {
+    setActiveDetailType(null);
+    setDetailItems([]);
+  };
+
   const fetchMonitoring = useCallback(async (options?: { silent?: boolean; period?: MonitoringPeriod }) => {
     const selectedPeriod = options?.period ?? period;
     if (!options?.silent) {
@@ -306,7 +336,10 @@ export default function MonitoringStock() {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-6">
+        <div 
+          onClick={() => openDetailModal("critical")}
+          className="bg-destructive/10 border border-destructive/20 rounded-2xl p-6 cursor-pointer hover:bg-destructive/15 hover:shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all"
+        >
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-xl bg-destructive/20 flex items-center justify-center">
               <AlertTriangle className="w-6 h-6 text-destructive" />
@@ -318,7 +351,10 @@ export default function MonitoringStock() {
           </div>
         </div>
 
-        <div className="bg-warning/10 border border-warning/20 rounded-2xl p-6">
+        <div 
+          onClick={() => openDetailModal("restock")}
+          className="bg-warning/10 border border-warning/20 rounded-2xl p-6 cursor-pointer hover:bg-warning/15 hover:shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all"
+        >
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-xl bg-warning/20 flex items-center justify-center">
               <Package className="w-6 h-6 text-warning" />
@@ -330,7 +366,10 @@ export default function MonitoringStock() {
           </div>
         </div>
 
-        <div className="bg-primary/10 border border-primary/20 rounded-2xl p-6">
+        <div 
+          onClick={() => openDetailModal("expiring_soon")}
+          className="bg-primary/10 border border-primary/20 rounded-2xl p-6 cursor-pointer hover:bg-primary/15 hover:shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all"
+        >
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
               <Calendar className="w-6 h-6 text-primary" />
@@ -339,7 +378,15 @@ export default function MonitoringStock() {
               <p className="text-sm text-primary/80">Mendekati Expired (1 bulan)</p>
               <p className="text-2xl font-semibold text-primary">{summary.expiring_soon_count}</p>
               {summary.expired_count > 0 && (
-                <p className="text-xs text-destructive mt-0.5">{summary.expired_count} sudah expired</p>
+                <p 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openDetailModal("expired");
+                  }}
+                  className="text-xs text-destructive mt-0.5 hover:underline cursor-pointer font-semibold inline-block hover:text-destructive-hover"
+                >
+                  {summary.expired_count} sudah expired
+                </p>
               )}
             </div>
           </div>
@@ -677,6 +724,228 @@ export default function MonitoringStock() {
           </div>
         )}
       </div>
+
+      {/* Detail Modal */}
+      {activeDetailType !== null && (() => {
+        const filteredDetailItems = detailItems.filter((item) => {
+          const query = detailSearchQuery.toLowerCase();
+          return (
+            item.nama_brng.toLowerCase().includes(query) ||
+            item.kode_brng.toLowerCase().includes(query) ||
+            (item.golongan && item.golongan.toLowerCase().includes(query))
+          );
+        });
+
+        const DETAIL_ITEMS_PER_PAGE = 10;
+        const detailTotalPages = Math.ceil(filteredDetailItems.length / DETAIL_ITEMS_PER_PAGE);
+        const paginatedDetailItems = filteredDetailItems.slice(
+          (detailCurrentPage - 1) * DETAIL_ITEMS_PER_PAGE,
+          detailCurrentPage * DETAIL_ITEMS_PER_PAGE
+        );
+
+        let modalTitle = "";
+        let countSuffix = "";
+        if (activeDetailType === "critical") {
+          modalTitle = "Daftar Barang Stok Kritis (< 20)";
+          countSuffix = "barang kritis";
+        } else if (activeDetailType === "restock") {
+          modalTitle = "Daftar Barang Perlu Restock (< 50)";
+          countSuffix = "barang perlu restock";
+        } else if (activeDetailType === "expiring_soon") {
+          modalTitle = "Daftar Barang Mendekati Expired (1 Bulan)";
+          countSuffix = "barang mendekati expired";
+        } else if (activeDetailType === "expired") {
+          modalTitle = "Daftar Barang Sudah Expired";
+          countSuffix = "barang expired";
+        }
+
+        const isStockType = activeDetailType === "critical" || activeDetailType === "restock";
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closeDetailModal} />
+            <div className="relative bg-card rounded-2xl border border-border shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-6 border-b border-border">
+                <div>
+                  <h2 className="text-lg font-semibold text-foreground">{modalTitle}</h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    Menampilkan total {filteredDetailItems.length} {countSuffix}
+                  </p>
+                </div>
+                <button
+                  onClick={closeDetailModal}
+                  className="p-2 rounded-lg hover:bg-muted/50 transition-colors text-muted-foreground"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Search Bar */}
+              <div className="p-6 border-b border-border bg-muted/20">
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <input
+                    type="text"
+                    placeholder="Cari nama barang atau kode barang..."
+                    value={detailSearchQuery}
+                    onChange={(e) => {
+                      setDetailSearchQuery(e.target.value);
+                      setDetailCurrentPage(1);
+                    }}
+                    className="w-full pl-12 pr-4 py-2.5 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Modal Content / Table */}
+              <div className="flex-1 overflow-y-auto p-6">
+                {detailLoading ? (
+                  <div className="flex flex-col items-center justify-center py-20">
+                    <RefreshCw className="w-8 h-8 text-primary animate-spin mb-3" />
+                    <p className="text-muted-foreground text-sm">Mengambil data detail...</p>
+                  </div>
+                ) : paginatedDetailItems.length === 0 ? (
+                  <div className="text-center py-16">
+                    <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
+                      {isStockType ? <Package className="w-8 h-8 text-muted-foreground" /> : <Clock className="w-8 h-8 text-muted-foreground" />}
+                    </div>
+                    <p className="text-muted-foreground font-medium">Tidak ada barang ditemukan</p>
+                    <p className="text-sm text-muted-foreground mt-1">Cobalah menggunakan kata kunci pencarian lain</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto border border-border rounded-xl">
+                    <table className="w-full border-collapse">
+                      <thead className="bg-muted/30 border-b border-border">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                            Kode Barang
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                            Nama Barang
+                          </th>
+                          {isStockType ? (
+                            <>
+                              <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                Golongan
+                              </th>
+                              <th className="px-6 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                Stok Gudang AP
+                              </th>
+                            </>
+                          ) : (
+                            <>
+                              <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                Tanggal Expire
+                              </th>
+                              <th className="px-6 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                Keterangan
+                              </th>
+                            </>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody className="bg-card divide-y divide-border text-sm">
+                        {paginatedDetailItems.map((item, idx) => {
+                          if (isStockType) {
+                            const isCritical = activeDetailType === "critical";
+                            return (
+                              <tr key={item.kode_brng + idx} className="hover:bg-muted/10 transition-colors">
+                                <td className="px-6 py-3.5 font-mono text-xs whitespace-nowrap text-muted-foreground">
+                                  {item.kode_brng}
+                                </td>
+                                <td className="px-6 py-3.5 font-medium text-foreground">
+                                  {item.nama_brng}
+                                </td>
+                                <td className="px-6 py-3.5 text-muted-foreground">
+                                  {item.golongan}
+                                </td>
+                                <td className={`px-6 py-3.5 text-right font-semibold ${isCritical ? "text-destructive" : "text-warning"}`}>
+                                  {formatNumber(item.stok)} unit
+                                </td>
+                              </tr>
+                            );
+                          } else {
+                            const isExpired = activeDetailType === "expired" || item.days_left < 0;
+                            return (
+                              <tr key={item.kode_brng + "-" + item.expire + idx} className="hover:bg-muted/10 transition-colors">
+                                <td className="px-6 py-3.5 font-mono text-xs whitespace-nowrap text-muted-foreground">
+                                  {item.kode_brng}
+                                </td>
+                                <td className="px-6 py-3.5 font-medium text-foreground">
+                                  {item.nama_brng}
+                                </td>
+                                <td className="px-6 py-3.5 text-muted-foreground font-mono">
+                                  {formatDate(item.expire)}
+                                </td>
+                                <td className={`px-6 py-3.5 text-right font-semibold ${isExpired ? "text-destructive" : "text-warning"}`}>
+                                  {isExpired ? (
+                                    <span>Expired ({Math.abs(item.days_left)} hari lalu)</span>
+                                  ) : (
+                                    <span>{item.days_left} hari lagi</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          }
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer / Pagination */}
+              {!detailLoading && detailTotalPages > 1 && (
+                <div className="px-6 py-4 border-t border-border bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                  <p className="text-sm text-muted-foreground">
+                    Menampilkan {filteredDetailItems.length > 0 ? (detailCurrentPage - 1) * DETAIL_ITEMS_PER_PAGE + 1 : 0}–
+                    {Math.min(detailCurrentPage * DETAIL_ITEMS_PER_PAGE, filteredDetailItems.length)} dari {filteredDetailItems.length} barang
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setDetailCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={detailCurrentPage === 1}
+                      className="px-3 py-1.5 rounded-lg border border-border hover:bg-card bg-background transition-colors text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Sebelumnya
+                    </button>
+                    {Array.from({ length: Math.min(5, detailTotalPages) }, (_, i) => {
+                      let targetPage = i + 1;
+                      if (detailCurrentPage > 3 && detailTotalPages > 5) {
+                        targetPage = detailCurrentPage - 3 + i;
+                        if (targetPage + (4 - i) > detailTotalPages) {
+                          targetPage = detailTotalPages - 4 + i;
+                        }
+                      }
+                      return (
+                        <button
+                          key={targetPage}
+                          onClick={() => setDetailCurrentPage(targetPage)}
+                          className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                            detailCurrentPage === targetPage
+                              ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
+                              : "border border-border hover:bg-card bg-background"
+                          }`}
+                        >
+                          {targetPage}
+                        </button>
+                      );
+                    })}
+                    <button
+                      onClick={() => setDetailCurrentPage((p) => Math.min(detailTotalPages, p + 1))}
+                      disabled={detailCurrentPage === detailTotalPages}
+                      className="px-3 py-1.5 rounded-lg border border-border hover:bg-card bg-background transition-colors text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Selanjutnya
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

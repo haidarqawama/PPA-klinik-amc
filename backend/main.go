@@ -2,8 +2,8 @@ package main
 
 import (
 	"backend/config"
+	"backend/controllers"
 	"backend/models"
-	"backend/routes"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -21,11 +21,57 @@ func main() {
 		})
 	})
 
-	routes.SetupRoutes(r)
+	r.GET("/api/items", controllers.GetItems)
+
+	r.POST(
+		"/api/items",
+		controllers.AddItem,
+	)
+
+	r.GET(
+		"/api/dashboard",
+		controllers.GetDashboard,
+	)
+
+	r.GET(
+		"/api/monitoring-stock",
+		controllers.GetMonitoringStock,
+	)
+
+	r.GET(
+		"/api/monitoring-stock/details",
+		controllers.GetMonitoringStockDetails,
+	)
+
+	r.GET(
+		"/api/masters",
+		controllers.GetMasters,
+	)
+
+	r.GET(
+		"/api/suppliers",
+		controllers.GetSuppliers,
+	)
+
+	r.POST(
+		"/api/suppliers",
+		controllers.AddSupplier,
+	)
+
+	r.PUT(
+		"/api/suppliers/:id",
+		controllers.UpdateSupplier,
+	)
+
+	r.DELETE(
+		"/api/suppliers/:id",
+		controllers.DeleteSupplier,
+	)
 
 	config.SIK.AutoMigrate(
 		&models.BarcodeItem{},
+		&models.ItemActivityLog{},
 	)
 
-	r.Run(":8080")
+	r.Run(":8081")
 }

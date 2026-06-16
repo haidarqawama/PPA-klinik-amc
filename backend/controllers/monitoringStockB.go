@@ -361,3 +361,141 @@ func GetMonitoringStock(c *gin.Context) {
 		},
 	})
 }
+
+func GetMonitoringStockDetails(c *gin.Context) {
+	detailType := strings.ToLower(strings.TrimSpace(c.Query("type")))
+	search := strings.ToLower(strings.TrimSpace(c.Query("search")))
+
+	if detailType == "" {
+		c.JSON(400, gin.H{"error": "Parameter type harus diisi ('critical', 'restock', 'expiring_soon', atau 'expired')"})
+		return
+	}
+
+	db := config.SIK
+
+	switch detailType {
+	case "critical":
+		var items []models.MonitoringStockLowItem
+		queryStr := `
+			SELECT
+				databarang.kode_brng,
+				databarang.nama_brng,
+				COALESCE(gudang_stok.total_stok, 0) AS stok,
+				COALESCE(golongan_barang.nama, 'Tidak Diketahui') AS golongan,
+				'critical' AS status
+			FROM databarang
+			` + gudangAPStockJoin + `
+			LEFT JOIN golongan_barang
+				ON databarang.kode_golongan = golongan_barang.kode
+			WHERE COALESCE(gudang_stok.total_stok, 0) < ?
+		`
+		var args []interface{}
+		args = append(args, criticalStockThreshold)
+
+		if search != "" {
+			queryStr += " AND (LOWER(databarang.nama_brng) LIKE ? OR LOWER(databarang.kode_brng) LIKE ?)"
+			args = append(args, "%"+search+"%", "%"+search+"%")
+		}
+
+		queryStr += " ORDER BY COALESCE(gudang_stok.total_stok, 0) ASC"
+
+		if err := db.Raw(queryStr, args...).Scan(&items).Error; err != nil {
+			c.JSON(500, gin.H{"error": "Gagal mengambil data stok kritis", "detail": err.Error()})
+			return
+		}
+		c.JSON(200, gin.H{"data": items})
+
+	case "restock":
+		var items []models.MonitoringStockLowItem
+		queryStr := `
+			SELECT
+				databarang.kode_brng,
+				databarang.nama_brng,
+				COALESCE(gudang_stok.total_stok, 0) AS stok,
+				COALESCE(golongan_barang.nama, 'Tidak Diketahui') AS golongan,
+				'warning' AS status
+			FROM databarang
+			` + gudangAPStockJoin + `
+			LEFT JOIN golongan_barang
+				ON databarang.kode_golongan = golongan_barang.kode
+			WHERE COALESCE(gudang_stok.total_stok, 0) >= ? AND COALESCE(gudang_stok.total_stok, 0) < ?
+		`
+		var args []interface{}
+		args = append(args, criticalStockThreshold, restockStockThreshold)
+
+		if search != "" {
+			queryStr += " AND (LOWER(databarang.nama_brng) LIKE ? OR LOWER(databarang.kode_brng) LIKE ?)"
+			args = append(args, "%"+search+"%", "%"+search+"%")
+		}
+
+		queryStr += " ORDER BY COALESCE(gudang_stok.total_stok, 0) ASC"
+
+		if err := db.Raw(queryStr, args...).Scan(&items).Error; err != nil {
+			c.JSON(500, gin.H{"error": "Gagal mengambil data perlu restock", "detail": err.Error()})
+			return
+		}
+		c.JSON(200, gin.H{"data": items})
+
+	case "expiring_soon":
+		var items []models.MonitoringStockExpiringItem
+		queryStr := `
+			SELECT
+				databarang.kode_brng,
+				databarang.nama_brng,
+				DATE_FORMAT(databarang.expire, '%Y-%m-%d') AS expire,
+				DATEDIFF(databarang.expire, CURDATE()) AS days_left,
+				databarang.kode_brng AS batch,
+				'expiring_soon' AS status
+			FROM databarang
+			WHERE databarang.expire BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL ? DAY)
+			` + validExpireDateWhere + `
+		`
+		var args []interface{}
+		args = append(args, expiringSoonDays)
+
+		if search != "" {
+			queryStr += " AND (LOWER(databarang.nama_brng) LIKE ? OR LOWER(databarang.kode_brng) LIKE ?)"
+			args = append(args, "%"+search+"%", "%"+search+"%")
+		}
+
+		queryStr += " ORDER BY databarang.expire ASC"
+
+		if err := db.Raw(queryStr, args...).Scan(&items).Error; err != nil {
+			c.JSON(500, gin.H{"error": "Gagal mengambil data mendekati expired", "detail": err.Error()})
+			return
+		}
+		c.JSON(200, gin.H{"data": items})
+
+	case "expired":
+		var items []models.MonitoringStockExpiringItem
+		queryStr := `
+			SELECT
+				databarang.kode_brng,
+				databarang.nama_brng,
+				DATE_FORMAT(databarang.expire, '%Y-%m-%d') AS expire,
+				DATEDIFF(databarang.expire, CURDATE()) AS days_left,
+				databarang.kode_brng AS batch,
+				'expired' AS status
+			FROM databarang
+			WHERE databarang.expire < CURDATE()
+			` + validExpireDateWhere + `
+		`
+		var args []interface{}
+
+		if search != "" {
+			queryStr += " AND (LOWER(databarang.nama_brng) LIKE ? OR LOWER(databarang.kode_brng) LIKE ?)"
+			args = append(args, "%"+search+"%", "%"+search+"%")
+		}
+
+		queryStr += " ORDER BY databarang.expire ASC"
+
+		if err := db.Raw(queryStr, args...).Scan(&items).Error; err != nil {
+			c.JSON(500, gin.H{"error": "Gagal mengambil data expired", "detail": err.Error()})
+			return
+		}
+		c.JSON(200, gin.H{"data": items})
+
+	default:
+		c.JSON(400, gin.H{"error": "Parameter type tidak valid. Harus 'critical', 'restock', 'expiring_soon', atau 'expired'"})
+	}
+}
