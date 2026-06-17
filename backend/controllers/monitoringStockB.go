@@ -87,25 +87,32 @@ func GetMonitoringStock(c *gin.Context) {
 	}
 
 	observationDays := monitoringObservationDays(period)
-	outDateFilter := monitoringMovementDateFilter(period)
-	inDateFilter := monitoringBatchDateFilter(period)
+
+	var anchorDate string
+	if err := config.SIK.Raw("SELECT COALESCE(MAX(tanggal), CURDATE()) FROM riwayat_barang_medis WHERE kd_bangsal = 'AP'").Scan(&anchorDate).Error; err != nil || anchorDate == "" {
+		anchorDate = "CURDATE()"
+	} else {
+		anchorDate = "'" + anchorDate + "'"
+	}
+
+	var rbmDateFilter string
+	switch period {
+	case "year":
+		rbmDateFilter = "AND riwayat_barang_medis.tanggal >= DATE_SUB(" + anchorDate + ", INTERVAL 365 DAY)"
+	case "all":
+		rbmDateFilter = ""
+	default:
+		rbmDateFilter = "AND riwayat_barang_medis.tanggal >= DATE_SUB(" + anchorDate + ", INTERVAL 30 DAY)"
+	}
 
 	if period == "all" {
 		var actualDays int
 		if err := config.SIK.Raw(`
 			SELECT GREATEST(
 				DATEDIFF(
-					CURDATE(),
+					COALESCE((SELECT MAX(tanggal) FROM riwayat_barang_medis WHERE kd_bangsal = 'AP'), CURDATE()),
 					COALESCE(
-						(SELECT MIN(earliest) FROM (
-							SELECT MIN(tanggal) AS earliest
-							FROM pengeluaran_obat_bhp
-							WHERE tanggal IS NOT NULL
-							UNION ALL
-							SELECT MIN(tgl_beli) AS earliest
-							FROM data_batch
-							WHERE tgl_beli IS NOT NULL
-						) ranges),
+						(SELECT MIN(tanggal) FROM riwayat_barang_medis WHERE kd_bangsal = 'AP' AND tanggal IS NOT NULL),
 						CURDATE()
 					)
 				),
@@ -260,23 +267,23 @@ func GetMonitoringStock(c *gin.Context) {
 		` + gudangAPStockJoin + `
 		LEFT JOIN (
 			SELECT
-				detail_pengeluaran_obat_bhp.kode_brng,
-				SUM(COALESCE(detail_pengeluaran_obat_bhp.jumlah, 0)) AS total_keluar
-			FROM pengeluaran_obat_bhp
-			JOIN detail_pengeluaran_obat_bhp
-				ON pengeluaran_obat_bhp.no_keluar = detail_pengeluaran_obat_bhp.no_keluar
-			WHERE pengeluaran_obat_bhp.tanggal IS NOT NULL
-				` + outDateFilter + `
-			GROUP BY detail_pengeluaran_obat_bhp.kode_brng
+				riwayat_barang_medis.kode_brng,
+				SUM(COALESCE(riwayat_barang_medis.keluar, 0)) AS total_keluar
+			FROM riwayat_barang_medis
+			WHERE riwayat_barang_medis.tanggal IS NOT NULL
+				AND riwayat_barang_medis.kd_bangsal = 'AP'
+				` + rbmDateFilter + `
+			GROUP BY riwayat_barang_medis.kode_brng
 		) keluar ON databarang.kode_brng = keluar.kode_brng
 		LEFT JOIN (
 			SELECT
-				data_batch.kode_brng,
-				SUM(COALESCE(data_batch.jumlahbeli, 0)) AS total_masuk
-			FROM data_batch
-			WHERE data_batch.tgl_beli IS NOT NULL
-				` + inDateFilter + `
-			GROUP BY data_batch.kode_brng
+				riwayat_barang_medis.kode_brng,
+				SUM(COALESCE(riwayat_barang_medis.masuk, 0)) AS total_masuk
+			FROM riwayat_barang_medis
+			WHERE riwayat_barang_medis.tanggal IS NOT NULL
+				AND riwayat_barang_medis.kd_bangsal = 'AP'
+				` + rbmDateFilter + `
+			GROUP BY riwayat_barang_medis.kode_brng
 		) masuk ON databarang.kode_brng = masuk.kode_brng
 		WHERE COALESCE(gudang_stok.total_stok, 0) > 0
 			OR COALESCE(keluar.total_keluar, 0) > 0
