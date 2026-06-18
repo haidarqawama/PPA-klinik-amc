@@ -285,10 +285,7 @@ func GetMonitoringStock(c *gin.Context) {
 				` + rbmDateFilter + `
 			GROUP BY riwayat_barang_medis.kode_brng
 		) masuk ON databarang.kode_brng = masuk.kode_brng
-		WHERE COALESCE(gudang_stok.total_stok, 0) > 0
-			OR COALESCE(keluar.total_keluar, 0) > 0
-		ORDER BY COALESCE(keluar.total_keluar, 0) DESC
-		LIMIT 30
+		ORDER BY COALESCE(keluar.total_keluar, 0) DESC, databarang.nama_brng ASC
 	`
 
 	if err := config.SIK.Raw(movementQuery).Scan(&movementRows).Error; err != nil {

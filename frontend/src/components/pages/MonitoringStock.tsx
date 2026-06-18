@@ -7,7 +7,7 @@ import { formatDate, isValidExpireDate } from '@/utils/dateFormat';
 import { apiUrl } from '@/lib/api';
 
 const MONITORING_REFRESH_MS = 30_000;
-const LIST_PREVIEW_LIMIT = 7;
+const LIST_PREVIEW_LIMIT = 5;
 
 type MonitoringPeriod = "day" | "month" | "year" | "all";
 
@@ -612,7 +612,7 @@ export default function MonitoringStock() {
                 >
                   {showAllLowStock
                     ? "Tampilkan Lebih Sedikit"
-                    : `Lihat Semua (${lowStockItems.length} barang)`}
+                    : "Lihat Semua Barang"}
                 </button>
               </div>
             )}
@@ -692,7 +692,7 @@ export default function MonitoringStock() {
                 >
                   {showAllExpiring
                     ? "Tampilkan Lebih Sedikit"
-                    : `Lihat Semua (${expiringItems.length} barang)`}
+                    : "Lihat Semua Barang"}
                 </button>
               </div>
             )}
