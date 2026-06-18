@@ -1,155 +1,148 @@
 'use client'
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, TrendingUp, Calendar, Search, User, Package } from "lucide-react";
+import { ArrowLeft, TrendingUp, Calendar, Search, User, Package, RefreshCw } from "lucide-react";
 import { formatDate } from '@/utils/dateFormat';
+import { apiUrl } from "@/lib/api";
 
-const stockInHistory = [
-  {
-    id: 1,
-    date: "2026-05-13",
-    time: "14:30",
-    item: "Paracetamol 500mg",
-    barcode: "8992761123456",
-    qty: 100,
-    unit: "Strip",
-    buyPrice: 500,
-    totalCost: 50000,
-    expired: "2027-12-31",
-    supplier: "PT Kimia Farma",
-    operator: "dr. Siti Aminah",
-    notes: "Restock rutin"
-  },
-  {
-    id: 2,
-    date: "2026-05-13",
-    time: "13:15",
-    item: "Amoxicillin 500mg",
-    barcode: "8992761234567",
-    qty: 200,
-    unit: "Strip",
-    buyPrice: 1200,
-    totalCost: 240000,
-    expired: "2027-08-15",
-    supplier: "PT Kalbe Farma",
-    operator: "Ns. Budi Santoso",
-    notes: "Stok menipis"
-  },
-  {
-    id: 3,
-    date: "2026-05-13",
-    time: "10:45",
-    item: "Sarung Tangan Latex L",
-    barcode: "8992761567890",
-    qty: 500,
-    unit: "Box",
-    buyPrice: 1500,
-    totalCost: 750000,
-    expired: "-",
-    supplier: "PT Medika Supplies",
-    operator: "Fitri Handayani, S.Farm",
-    notes: "Pembelian bulk"
-  },
-  {
-    id: 4,
-    date: "2026-05-12",
-    time: "16:20",
-    item: "Vitamin C 1000mg",
-    barcode: "8992761678901",
-    qty: 150,
-    unit: "Strip",
-    buyPrice: 800,
-    totalCost: 120000,
-    expired: "2027-06-30",
-    supplier: "PT Tempo Scan Pacific",
-    operator: "dr. Siti Aminah",
-    notes: ""
-  },
-  {
-    id: 5,
-    date: "2026-05-12",
-    time: "11:30",
-    item: "Betadine Solution 60ml",
-    barcode: "8992761456789",
-    qty: 50,
-    unit: "Botol",
-    buyPrice: 15000,
-    totalCost: 750000,
-    expired: "2027-10-10",
-    supplier: "PT Mahakam Beta Farma",
-    operator: "Ns. Budi Santoso",
-    notes: "Urgent restock"
-  },
-  {
-    id: 6,
-    date: "2026-05-11",
-    time: "15:10",
-    item: "Tramadol 50mg",
-    barcode: "8992761345678",
-    qty: 30,
-    unit: "Strip",
-    buyPrice: 3000,
-    totalCost: 90000,
-    expired: "2027-03-20",
-    supplier: "PT Sanbe Farma",
-    operator: "Fitri Handayani, S.Farm",
-    notes: "Psiko/Narko - Dicatat di buku khusus"
-  },
-  {
-    id: 7,
-    date: "2026-05-11",
-    time: "09:20",
-    item: "Masker Medis 3 Ply",
-    barcode: "8992761901234",
-    qty: 1000,
-    unit: "Box",
-    buyPrice: 800,
-    totalCost: 800000,
-    expired: "-",
-    supplier: "PT Sensi Indonesia",
-    operator: "Ns. Budi Santoso",
-    notes: ""
-  },
-  {
-    id: 8,
-    date: "2026-05-10",
-    time: "14:45",
-    item: "Omeprazole 20mg",
-    barcode: "8992761012345",
-    qty: 80,
-    unit: "Strip",
-    buyPrice: 1500,
-    totalCost: 120000,
-    expired: "2027-09-15",
-    supplier: "PT Dexa Medica",
-    operator: "dr. Siti Aminah",
-    notes: ""
-  },
-];
+const PAGE_SIZE = 100;
+
+type StockInHistoryItem = {
+  kode_brng: string;
+  nama_brng: string;
+  barcode: string;
+  qty: number;
+  unit: string;
+  buy_price: number;
+  total_cost: number;
+  expired: string;
+  date: string;
+  time: string;
+  supplier: string;
+  operator: string;
+  note: string;
+};
+
+const formatCurrency = (value: number) => `Rp ${Number(value || 0).toLocaleString('id-ID')}`;
+
+type StockInHistoryResponse = {
+  data?: StockInHistoryItem[];
+  error?: string;
+  page?: number;
+  limit?: number;
+  total?: number;
+  total_pages?: number;
+};
+
+const readApiResponse = async (response: Response) => {
+  const text = await response.text();
+
+  if (!text) {
+    return {} as StockInHistoryResponse;
+  }
+
+  try {
+    return JSON.parse(text) as StockInHistoryResponse;
+  } catch {
+    if (response.status === 404) {
+      throw new Error("Endpoint riwayat barang masuk belum aktif. Restart backend lalu muat ulang halaman.");
+    }
+
+    throw new Error(text.slice(0, 160) || "Respons server tidak valid");
+  }
+};
 
 export default function StockInHistory() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
+  const [history, setHistory] = useState<StockInHistoryItem[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalRows, setTotalRows] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const filteredData = stockInHistory.filter(item => {
-    const matchesSearch = item.item.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         item.barcode.includes(searchQuery) ||
-                         item.operator.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesDate = !selectedDate || item.date === selectedDate;
-    return matchesSearch && matchesDate;
-  });
+  const fetchHistory = useCallback(async (signal?: AbortSignal) => {
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(PAGE_SIZE),
+    });
 
-  const totalQty = filteredData.reduce((sum, item) => sum + item.qty, 0);
-  const totalValue = filteredData.reduce((sum, item) => sum + item.totalCost, 0);
+    if (searchQuery.trim()) {
+      params.set("search", searchQuery.trim());
+    }
+
+    if (selectedDate) {
+      params.set("date", selectedDate);
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const res = await fetch(apiUrl(`/api/stock-in/history?${params.toString()}`), { signal });
+      const data = await readApiResponse(res);
+
+      if (!res.ok) {
+        throw new Error(data.error || "Gagal mengambil riwayat barang masuk");
+      }
+
+      const rows = data.data || [];
+
+      setHistory(rows);
+      setPage(data.page || page);
+      setTotalRows(data.total ?? rows.length);
+      setTotalPages(data.total_pages ?? (rows.length > 0 ? 1 : 0));
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        return;
+      }
+
+      console.error(err);
+      setError(err instanceof Error ? err.message : "Tidak dapat terhubung ke server");
+      setHistory([]);
+      setTotalRows(0);
+      setTotalPages(0);
+    } finally {
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
+    }
+  }, [page, searchQuery, selectedDate]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      fetchHistory(controller.signal);
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [fetchHistory]);
+
+  const totalQty = history.reduce((sum, item) => sum + Number(item.qty || 0), 0);
+  const totalValue = history.reduce((sum, item) => sum + Number(item.total_cost || 0), 0);
+  const firstRow = totalRows === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const lastRow = Math.min(page * PAGE_SIZE, totalRows);
+  const visiblePages = Array.from(
+    { length: totalPages },
+    (_, index) => index + 1,
+  ).filter((pageNumber) => (
+    pageNumber === 1 ||
+    pageNumber === totalPages ||
+    Math.abs(pageNumber - page) <= 1
+  ));
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center gap-4">
         <Link
           href="/stock-in"
           className="p-2 rounded-xl hover:bg-muted transition-colors"
+          aria-label="Kembali ke barang masuk"
         >
           <ArrowLeft className="w-5 h-5" />
         </Link>
@@ -159,7 +152,6 @@ export default function StockInHistory() {
         </div>
       </div>
 
-      {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-card rounded-2xl border border-border p-6">
           <div className="flex items-center gap-3">
@@ -168,7 +160,7 @@ export default function StockInHistory() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Total Transaksi</p>
-              <p className="text-xl font-semibold text-foreground">{filteredData.length}</p>
+              <p className="text-xl font-semibold text-foreground">{totalRows.toLocaleString('id-ID')}</p>
             </div>
           </div>
         </div>
@@ -192,26 +184,26 @@ export default function StockInHistory() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Total Nilai Pembelian</p>
-              <p className="text-xl font-semibold text-foreground">
-                Rp {(totalValue / 1000).toFixed(0)}K
-              </p>
+              <p className="text-xl font-semibold text-foreground">{formatCurrency(totalValue)}</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Filters */}
       <div className="bg-card rounded-2xl border border-border p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_240px_auto] gap-4 items-end">
           <div>
             <label className="block text-sm mb-2">Cari Barang / Petugas</label>
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Nama barang, barcode, atau nama petugas..."
+                placeholder="Nama barang, kode, barcode, petugas, supplier..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setPage(1);
+                }}
                 className="w-full pl-12 pr-4 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
@@ -222,28 +214,34 @@ export default function StockInHistory() {
             <div className="relative">
               <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
               <input
-                type="text"
-                placeholder="dd/mm/yyyy"
-                pattern="\d{2}/\d{2}/\d{4}"
-                className="w-full pl-12 pr-4 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
-                onInput={(e) => {
-                  let value = e.currentTarget.value.replace(/\D/g, '');
-                  if (value.length >= 2) {
-                    value = value.slice(0, 2) + '/' + value.slice(2);
-                  }
-                  if (value.length >= 5) {
-                    value = value.slice(0, 5) + '/' + value.slice(5, 9);
-                  }
-                  e.currentTarget.value = value;
+                type="date"
+                min="2000-01-01"
+                max="2100-12-31"
+                value={selectedDate}
+                onChange={(e) => {
+                  setSelectedDate(e.target.value);
+                  setPage(1);
                 }}
-                maxLength={10}
+                className="w-full pl-12 pr-4 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setSearchQuery("");
+              setSelectedDate("");
+              setPage(1);
+            }}
+            className="h-12 px-4 rounded-xl border border-border hover:bg-muted/50 transition-colors text-sm flex items-center justify-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Reset
+          </button>
         </div>
       </div>
 
-      {/* History Table */}
       <div className="bg-card rounded-2xl border border-border shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -261,12 +259,36 @@ export default function StockInHistory() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filteredData.map((item) => (
-                <tr key={item.id} className="hover:bg-muted/20 transition-colors">
+              {loading && (
+                <tr>
+                  <td colSpan={9} className="px-6 py-10 text-center text-sm text-muted-foreground">
+                    Memuat riwayat barang masuk...
+                  </td>
+                </tr>
+              )}
+
+              {!loading && error && (
+                <tr>
+                  <td colSpan={9} className="px-6 py-10 text-center text-sm text-red-500">
+                    {error}
+                  </td>
+                </tr>
+              )}
+
+              {!loading && !error && history.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="px-6 py-10 text-center text-sm text-muted-foreground">
+                    Tidak ada riwayat barang masuk yang sesuai filter
+                  </td>
+                </tr>
+              )}
+
+              {!loading && !error && history.map((item, index) => (
+                <tr key={`${item.kode_brng}-${item.date}-${item.time}-${index}`} className="hover:bg-muted/20 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div>
                       <p className="text-sm font-medium text-foreground">{formatDate(item.date)}</p>
-                      <p className="text-xs text-muted-foreground">{item.time}</p>
+                      <p className="text-xs text-muted-foreground">{item.time || "-"}</p>
                     </div>
                   </td>
                   <td className="px-6 py-4">
@@ -275,36 +297,40 @@ export default function StockInHistory() {
                         <TrendingUp className="w-5 h-5 text-success" />
                       </div>
                       <div>
-                        <p className="font-medium text-foreground">{item.item}</p>
-                        <p className="text-xs text-muted-foreground font-mono">{item.barcode}</p>
+                        <p className="font-medium text-foreground">{item.nama_brng}</p>
+                        <p className="text-xs text-muted-foreground font-mono">
+                          {item.barcode || item.kode_brng}
+                        </p>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm font-medium text-success">+{item.qty} {item.unit}</span>
+                    <span className="text-sm font-medium text-success">
+                      +{Number(item.qty || 0).toLocaleString('id-ID')} {item.unit || "unit"}
+                    </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
-                    Rp {item.buyPrice.toLocaleString('id-ID')}
+                    {formatCurrency(item.buy_price)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-foreground">
-                    Rp {item.totalCost.toLocaleString('id-ID')}
+                    {formatCurrency(item.total_cost)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
                     {formatDate(item.expired)}
                   </td>
                   <td className="px-6 py-4">
-                    <p className="text-sm text-foreground">{item.supplier}</p>
+                    <p className="text-sm text-foreground">{item.supplier || "-"}</p>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                         <User className="w-4 h-4 text-primary" />
                       </div>
-                      <p className="text-sm text-foreground">{item.operator}</p>
+                      <p className="text-sm text-foreground">{item.operator || "-"}</p>
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <p className="text-sm text-muted-foreground">{item.notes || "-"}</p>
+                    <p className="text-sm text-muted-foreground">{item.note || "-"}</p>
                   </td>
                 </tr>
               ))}
@@ -312,26 +338,58 @@ export default function StockInHistory() {
           </table>
         </div>
 
-        {/* Pagination */}
-        <div className="px-6 py-4 border-t border-border flex items-center justify-between">
+        <div className="px-6 py-4 border-t border-border flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <p className="text-sm text-muted-foreground">
-            Menampilkan {filteredData.length} dari {stockInHistory.length} transaksi
+            Menampilkan {firstRow.toLocaleString('id-ID')}-{lastRow.toLocaleString('id-ID')} dari {totalRows.toLocaleString('id-ID')} transaksi
           </p>
-          <div className="flex gap-2">
-            <button className="px-4 py-2 rounded-lg border border-border hover:bg-muted/50 transition-colors text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((currentPage) => Math.max(1, currentPage - 1))}
+              disabled={loading || page <= 1}
+              className="px-4 py-2 rounded-lg border border-border hover:bg-muted/50 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               Sebelumnya
             </button>
-            <button className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm">
-              1
-            </button>
-            <button className="px-4 py-2 rounded-lg border border-border hover:bg-muted/50 transition-colors text-sm">
-              2
-            </button>
-            <button className="px-4 py-2 rounded-lg border border-border hover:bg-muted/50 transition-colors text-sm">
-              3
-            </button>
-            <button className="px-4 py-2 rounded-lg border border-border hover:bg-muted/50 transition-colors text-sm">
+
+            {visiblePages.map((pageNumber, index) => {
+              const previousPage = visiblePages[index - 1];
+              const showGap = previousPage && pageNumber - previousPage > 1;
+
+              return (
+                <div key={pageNumber} className="flex items-center gap-2">
+                  {showGap && <span className="text-sm text-muted-foreground">...</span>}
+                  <button
+                    type="button"
+                    onClick={() => setPage(pageNumber)}
+                    disabled={loading || pageNumber === page}
+                    className={`min-w-10 px-3 py-2 rounded-lg border text-sm transition-colors ${
+                      pageNumber === page
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border hover:bg-muted/50"
+                    } disabled:cursor-default`}
+                  >
+                    {pageNumber}
+                  </button>
+                </div>
+              );
+            })}
+
+            <button
+              type="button"
+              onClick={() => setPage((currentPage) => Math.min(totalPages, currentPage + 1))}
+              disabled={loading || totalPages === 0 || page >= totalPages}
+              className="px-4 py-2 rounded-lg border border-border hover:bg-muted/50 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               Selanjutnya
+            </button>
+
+            <button
+              type="button"
+              onClick={() => fetchHistory()}
+              className="px-4 py-2 rounded-lg border border-border hover:bg-muted/50 transition-colors text-sm"
+            >
+              Muat ulang
             </button>
           </div>
         </div>
