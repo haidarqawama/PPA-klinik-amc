@@ -13,6 +13,7 @@ type MonitoringStockLowItem struct {
 	Stok     float64 `json:"stok" gorm:"column:stok"`
 	Golongan string  `json:"golongan" gorm:"column:golongan"`
 	Status   string  `json:"status" gorm:"column:status"`
+	Satuan   string  `json:"satuan" gorm:"column:satuan"`
 }
 
 type MonitoringStockExpiringItem struct {
@@ -32,6 +33,7 @@ type MonitoringStockTurnover struct {
 	PersediaanAkhir    float64 `json:"persediaan_akhir" gorm:"column:persediaan_akhir"`
 	RataRataPersediaan float64 `json:"rata_rata_persediaan" gorm:"column:rata_rata_persediaan"`
 	TurnoverRatio      float64 `json:"turnover_ratio" gorm:"column:turnover_ratio"`
+	Satuan             string  `json:"satuan" gorm:"column:satuan"`
 }
 
 type MonitoringStockCoverage struct {
@@ -41,6 +43,7 @@ type MonitoringStockCoverage struct {
 	RataRataPemakaianHarian float64 `json:"rata_rata_pemakaian_harian" gorm:"column:rata_rata_pemakaian_harian"`
 	CoverageDays            float64 `json:"coverage_days" gorm:"column:coverage_days"`
 	Status                  string  `json:"status" gorm:"column:status"`
+	Satuan                  string  `json:"satuan" gorm:"column:satuan"`
 }
 
 type MonitoringStockGolonganValue struct {
@@ -61,6 +64,7 @@ type MonitoringStockMovementRow struct {
 	StokAkhir    float64 `gorm:"column:stok_akhir"`
 	BarangKeluar float64 `gorm:"column:barang_keluar"`
 	BarangMasuk  float64 `gorm:"column:barang_masuk"`
+	Satuan       string  `gorm:"column:satuan"`
 }
 
 type MonitoringStockResponse struct {

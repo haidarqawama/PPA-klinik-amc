@@ -175,11 +175,14 @@ func GetMonitoringStock(c *gin.Context) {
 			CASE
 				WHEN COALESCE(gudang_stok.total_stok, 0) < ? THEN 'critical'
 				ELSE 'warning'
-			END AS status
+			END AS status,
+			COALESCE(kodesatuan.satuan, '-') AS satuan
 		FROM databarang
 		`+gudangAPStockJoin+`
 		LEFT JOIN golongan_barang
 			ON databarang.kode_golongan = golongan_barang.kode
+		LEFT JOIN kodesatuan
+			ON databarang.kode_sat = kodesatuan.kode_sat
 		WHERE COALESCE(gudang_stok.total_stok, 0) < ?
 		ORDER BY COALESCE(gudang_stok.total_stok, 0) ASC
 		LIMIT 50
@@ -262,9 +265,12 @@ func GetMonitoringStock(c *gin.Context) {
 			databarang.nama_brng,
 			COALESCE(gudang_stok.total_stok, 0) AS stok_akhir,
 			COALESCE(keluar.total_keluar, 0) AS barang_keluar,
-			COALESCE(masuk.total_masuk, 0) AS barang_masuk
+			COALESCE(masuk.total_masuk, 0) AS barang_masuk,
+			COALESCE(kodesatuan.satuan, '-') AS satuan
 		FROM databarang
 		` + gudangAPStockJoin + `
+		LEFT JOIN kodesatuan
+			ON databarang.kode_sat = kodesatuan.kode_sat
 		LEFT JOIN (
 			SELECT
 				riwayat_barang_medis.kode_brng,
@@ -328,6 +334,7 @@ func GetMonitoringStock(c *gin.Context) {
 			PersediaanAkhir:    round2(persediaanAkhir),
 			RataRataPersediaan: round2(rataRata),
 			TurnoverRatio:      round2(turnoverRatio),
+			Satuan:             row.Satuan,
 		})
 
 		coverageItems = append(coverageItems, models.MonitoringStockCoverage{
@@ -337,6 +344,7 @@ func GetMonitoringStock(c *gin.Context) {
 			RataRataPemakaianHarian: round2(avgDailyUsage),
 			CoverageDays:            round2(coverageDays),
 			Status:                  coverageStatus(coverageDays, hasUsage),
+			Satuan:                  row.Satuan,
 		})
 	}
 
@@ -386,11 +394,14 @@ func GetMonitoringStockDetails(c *gin.Context) {
 				databarang.nama_brng,
 				COALESCE(gudang_stok.total_stok, 0) AS stok,
 				COALESCE(golongan_barang.nama, 'Tidak Diketahui') AS golongan,
-				'critical' AS status
+				'critical' AS status,
+				COALESCE(kodesatuan.satuan, '-') AS satuan
 			FROM databarang
 			` + gudangAPStockJoin + `
 			LEFT JOIN golongan_barang
 				ON databarang.kode_golongan = golongan_barang.kode
+			LEFT JOIN kodesatuan
+				ON databarang.kode_sat = kodesatuan.kode_sat
 			WHERE COALESCE(gudang_stok.total_stok, 0) < ?
 		`
 		var args []interface{}
@@ -417,11 +428,14 @@ func GetMonitoringStockDetails(c *gin.Context) {
 				databarang.nama_brng,
 				COALESCE(gudang_stok.total_stok, 0) AS stok,
 				COALESCE(golongan_barang.nama, 'Tidak Diketahui') AS golongan,
-				'warning' AS status
+				'warning' AS status,
+				COALESCE(kodesatuan.satuan, '-') AS satuan
 			FROM databarang
 			` + gudangAPStockJoin + `
 			LEFT JOIN golongan_barang
 				ON databarang.kode_golongan = golongan_barang.kode
+			LEFT JOIN kodesatuan
+				ON databarang.kode_sat = kodesatuan.kode_sat
 			WHERE COALESCE(gudang_stok.total_stok, 0) >= ? AND COALESCE(gudang_stok.total_stok, 0) < ?
 		`
 		var args []interface{}

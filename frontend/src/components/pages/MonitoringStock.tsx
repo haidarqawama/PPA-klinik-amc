@@ -33,6 +33,7 @@ interface MonitoringStockLowItem {
   stok: number;
   golongan: string;
   status: "critical" | "warning";
+  satuan?: string;
 }
 
 interface MonitoringStockExpiringItem {
@@ -52,6 +53,7 @@ interface MonitoringStockTurnover {
   persediaan_akhir: number;
   rata_rata_persediaan: number;
   turnover_ratio: number;
+  satuan?: string;
 }
 
 interface MonitoringStockCoverage {
@@ -61,6 +63,7 @@ interface MonitoringStockCoverage {
   rata_rata_pemakaian_harian: number;
   coverage_days: number;
   status: "critical" | "warning" | "good";
+  satuan?: string;
 }
 
 interface MonitoringStockGolonganStat {
@@ -433,8 +436,7 @@ export default function MonitoringStock() {
               turnoverItems.map((item, index) => {
                 const turnoverStatus = getTurnoverStatus(item.turnover_ratio);
                 const color = TURNOVER_COLORS[index % TURNOVER_COLORS.length];
-
-                return (
+                 return (
                   <div key={item.kode_brng} className="p-3 rounded-xl bg-muted/30 border border-border">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-3">
@@ -447,7 +449,7 @@ export default function MonitoringStock() {
                         <div>
                           <p className="text-sm font-medium text-foreground">{item.nama_brng}</p>
                           <p className="text-xs text-muted-foreground">
-                            Keluar: {formatNumber(item.barang_keluar)} unit
+                            Keluar: {formatNumber(item.barang_keluar)} {item.satuan || 'unit'}
                           </p>
                         </div>
                       </div>
@@ -462,11 +464,11 @@ export default function MonitoringStock() {
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div className="p-2 rounded-lg bg-background">
                         <p className="text-muted-foreground">Persediaan Awal</p>
-                        <p className="font-medium text-foreground">{formatNumber(item.persediaan_awal)} unit</p>
+                        <p className="font-medium text-foreground">{formatNumber(item.persediaan_awal)} {item.satuan || 'unit'}</p>
                       </div>
                       <div className="p-2 rounded-lg bg-background">
                         <p className="text-muted-foreground">Rata-rata Stok</p>
-                        <p className="font-medium text-foreground">{formatNumber(item.rata_rata_persediaan)} unit</p>
+                        <p className="font-medium text-foreground">{formatNumber(item.rata_rata_persediaan)} {item.satuan || 'unit'}</p>
                       </div>
                     </div>
 
@@ -515,7 +517,7 @@ export default function MonitoringStock() {
                         <div>
                           <p className="text-sm font-medium text-foreground">{item.nama_brng}</p>
                           <p className="text-xs text-muted-foreground">
-                            Rata-rata: {formatNumber(item.rata_rata_pemakaian_harian)} unit/hari
+                            Rata-rata: {formatNumber(item.rata_rata_pemakaian_harian)} {item.satuan || 'unit'}/hari
                           </p>
                         </div>
                       </div>
@@ -530,7 +532,7 @@ export default function MonitoringStock() {
                     </div>
                     <div className="space-y-2">
                       <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>Stok: {formatNumber(item.stok_saat_ini)} unit</span>
+                        <span>Stok: {formatNumber(item.stok_saat_ini)} {item.satuan || 'unit'}</span>
                         <span>{coveragePercentage.toFixed(0)}%</span>
                       </div>
                       <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
@@ -588,7 +590,7 @@ export default function MonitoringStock() {
                         }`}>
                           {formatNumber(displayStok)} / 50
                         </p>
-                        <p className="text-xs text-muted-foreground">unit</p>
+                        <p className="text-xs text-muted-foreground">{item.satuan || 'unit'}</p>
                       </div>
                     </div>
                     <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
@@ -861,7 +863,7 @@ export default function MonitoringStock() {
                                   {item.golongan}
                                 </td>
                                 <td className={`px-6 py-3.5 text-right font-semibold ${isCritical ? "text-destructive" : "text-warning"}`}>
-                                  {formatNumber(item.stok)} unit
+                                  {formatNumber(item.stok)} {item.satuan || 'unit'}
                                 </td>
                               </tr>
                             );
