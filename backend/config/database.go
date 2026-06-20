@@ -53,6 +53,30 @@ func ConnectDatabase() {
 		"CREATE INDEX idx_rbm_dashboard_recent ON riwayat_barang_medis (kd_bangsal, tanggal, jam)",
 	)
 
+	ensureIndex(
+		"riwayat_barang_medis",
+		"idx_rbm_stock_in_history",
+		"CREATE INDEX idx_rbm_stock_in_history ON riwayat_barang_medis (kd_bangsal, masuk, tanggal, jam)",
+	)
+
+	ensureIndex(
+		"riwayat_barang_medis",
+		"idx_rbm_stock_out_history",
+		"CREATE INDEX idx_rbm_stock_out_history ON riwayat_barang_medis (kd_bangsal, keluar, tanggal, jam)",
+	)
+
+	ensureIndex(
+		"gudangbarang",
+		"idx_gudangbarang_ap_stock",
+		"CREATE INDEX idx_gudangbarang_ap_stock ON gudangbarang (kd_bangsal, stok, kode_brng)",
+	)
+
+	ensureIndex(
+		"barcode_obat",
+		"idx_barcode_obat_barcode",
+		"CREATE INDEX idx_barcode_obat_barcode ON barcode_obat (barcode)",
+	)
+
 	fmt.Println(
 		"Database connected",
 	)

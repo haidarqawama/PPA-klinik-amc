@@ -87,26 +87,22 @@ func GetDashboard(c *gin.Context) {
 	}
 
 	if err := config.SIK.Raw(`
-        SELECT *
-        FROM (
-            SELECT
-                DATE_FORMAT(tanggal, '%Y-%m') AS month,
-                SUM(masuk) AS barang_masuk,
-                SUM(keluar) AS barang_keluar
-            FROM riwayat_barang_medis
-            WHERE tanggal IS NOT NULL
-            GROUP BY YEAR(tanggal), MONTH(tanggal)
-            ORDER BY YEAR(tanggal) DESC, MONTH(tanggal) DESC
-            LIMIT 5
-        ) recent_months
-        ORDER BY month ASC
+        SELECT
+            DATE_FORMAT(tanggal, '%Y-%m') AS month,
+            SUM(masuk) AS barang_masuk,
+            SUM(keluar) AS barang_keluar
+        FROM riwayat_barang_medis
+        WHERE tanggal >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 4 MONTH), '%Y-%m-01')
+            AND tanggal < DATE_ADD(LAST_DAY(CURDATE()), INTERVAL 1 DAY)
+        GROUP BY YEAR(tanggal), MONTH(tanggal)
+        ORDER BY YEAR(tanggal) ASC, MONTH(tanggal) ASC
     `).Scan(&stockMovement).Error; err != nil {
-        c.JSON(500, gin.H{
-            "error": "Gagal mengambil pergerakan stok",
-            "detail": err.Error(),
-        })
-        return
-    }
+		c.JSON(500, gin.H{
+			"error":  "Gagal mengambil pergerakan stok",
+			"detail": err.Error(),
+		})
+		return
+	}
 
 	if err := config.SIK.Raw(`
         SELECT

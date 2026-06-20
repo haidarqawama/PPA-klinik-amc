@@ -28,6 +28,7 @@ func SetupRoutes(r *gin.Engine) {
 	r.GET("/api/stock-in/history", controllers.GetStockInHistory)
 	r.POST("/api/stock-in", controllers.AddStockIn)
 	r.GET("/api/stock-out/items", controllers.SearchStockOutItems)
+	r.GET("/api/stock-out/batches", controllers.GetStockOutBatches)
 	r.GET("/api/stock-out/recent", controllers.GetRecentStockOut)
 	r.GET("/api/stock-out/history", controllers.GetStockOutHistory)
 	r.POST("/api/stock-out", controllers.AddStockOut)

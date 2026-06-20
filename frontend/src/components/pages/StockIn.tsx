@@ -50,7 +50,10 @@ export default function StockIn() {
   const [recentStockIn, setRecentStockIn] = useState<RecentStockIn[]>([]);
   const [qty, setQty] = useState("");
   const [price, setPrice] = useState("");
+  const [tanggalPembelian, setTanggalPembelian] = useState("");
   const [expired, setExpired] = useState("");
+  const [noBatch, setNoBatch] = useState("");
+  const [noFaktur, setNoFaktur] = useState("");
   const [note, setNote] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -134,13 +137,16 @@ export default function StockIn() {
     setSelectedItem(null);
     setQty("");
     setPrice("");
+    setTanggalPembelian("");
     setExpired("");
+    setNoBatch("");
+    setNoFaktur("");
     setNote("");
   };
 
   const handleSubmit = async () => {
-    if (!selectedItem || parseNumber(qty) <= 0) {
-      showTemporaryMessage("Pilih barang dan isi jumlah masuk");
+    if (!selectedItem || parseNumber(qty) <= 0 || !noBatch.trim() || !noFaktur.trim() || !tanggalPembelian) {
+      showTemporaryMessage("Pilih barang, isi jumlah masuk, no. batch, no. faktur, dan tanggal pembelian");
       return;
     }
 
@@ -153,7 +159,10 @@ export default function StockIn() {
           kode_brng: selectedItem.kode_brng,
           qty: parseNumber(qty),
           price: parseNumber(price),
+          tanggal_pembelian: tanggalPembelian,
           expired: expired || null,
+          no_batch: noBatch,
+          no_faktur: noFaktur,
           note,
         }),
       });
@@ -287,6 +296,44 @@ export default function StockIn() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm mb-2">No. Batch *</label>
+                  <input
+                    type="text"
+                    value={noBatch}
+                    onChange={(event) => setNoBatch(event.target.value)}
+                    className="w-full px-4 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+                    placeholder="Masukkan nomor batch"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm mb-2">No. Faktur *</label>
+                  <input
+                    type="text"
+                    value={noFaktur}
+                    onChange={(event) => setNoFaktur(event.target.value)}
+                    className="w-full px-4 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+                    placeholder="Masukkan nomor faktur"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm mb-2">Tanggal Pembelian *</label>
+                <div className="relative">
+                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <input
+                    type="date"
+                    min="2000-01-01"
+                    max="2100-12-31"
+                    value={tanggalPembelian}
+                    onChange={(event) => setTanggalPembelian(event.target.value)}
+                    className="w-full pl-12 pr-4 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm mb-2">Tanggal Expired</label>
                 <div className="relative">
@@ -315,7 +362,7 @@ export default function StockIn() {
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={loading || parseNumber(qty) <= 0}
+                disabled={loading || parseNumber(qty) <= 0 || !noBatch.trim() || !noFaktur.trim() || !tanggalPembelian}
                 className="w-full py-3 px-6 rounded-xl bg-success text-success-foreground shadow-lg shadow-success/20 hover:bg-success/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? "Memproses..." : "Proses Barang Masuk"}

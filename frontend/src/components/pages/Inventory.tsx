@@ -48,6 +48,10 @@ type InventoryItem = {
   ralan?: number;
   utama?: number;
   expire?: string | null;
+  no_batch?: string | null;
+  no_faktur?: string | null;
+  tgl_beli?: string | null;
+  tgl_kadaluarsa?: string | null;
 };
 
 export default function Inventory() {
@@ -181,10 +185,13 @@ export default function Inventory() {
   };
 
   const filteredData = (items || []).filter(item => {
+    const normalizedSearch = searchQuery.toLowerCase();
     const matchesSearch =
-      item.nama_brng?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.kode_brng?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.barcode?.toLowerCase().includes(searchQuery.toLowerCase())
+      item.nama_brng?.toLowerCase().includes(normalizedSearch) ||
+      item.kode_brng?.toLowerCase().includes(normalizedSearch) ||
+      item.barcode?.toLowerCase().includes(normalizedSearch) ||
+      item.no_batch?.toLowerCase().includes(normalizedSearch) ||
+      item.no_faktur?.toLowerCase().includes(normalizedSearch)
     const matchesCategory =
       selectedCategory === "all" ||
       item.golongan === selectedCategory
@@ -241,7 +248,7 @@ export default function Inventory() {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Cari nama barang atau barcode..."
+              placeholder="Cari kode barang, nama barang, no. batch, atau no. faktur..."
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
@@ -337,7 +344,16 @@ export default function Inventory() {
                   Harga Jual Utama (BPJS)
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Expired
+                  Tanggal Masuk
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Tanggal Kadaluarsa
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  No. Batch
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  No. Faktur
                 </th>
                 <th className="px-6 py-4 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Aksi
@@ -348,7 +364,7 @@ export default function Inventory() {
               {paginatedItems.map((item, index) => {
                 const badge = getCategoryBadge(item.golongan || "all");
                 return (
-                  <tr key={`${item.kode_brng}-${index}`} className="hover:bg-muted/20 transition-colors">
+                  <tr key={`${item.kode_brng}-${item.no_batch || index}-${item.no_faktur || index}`} className="hover:bg-muted/20 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -401,7 +417,16 @@ export default function Inventory() {
                       {formatCurrency(item.utama || 0)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
-                      {formatDate(item.expire) || undefined}
+                      {formatDate(item.tgl_beli) || "-"}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
+                      {formatDate(item.tgl_kadaluarsa || item.expire) || "-"}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
+                      {item.no_batch || "-"}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
+                      {item.no_faktur || "-"}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <div className="flex gap-2">

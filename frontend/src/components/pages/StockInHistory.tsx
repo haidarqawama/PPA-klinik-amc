@@ -33,6 +33,8 @@ type StockInHistoryResponse = {
   limit?: number;
   total?: number;
   total_pages?: number;
+  total_qty?: number;
+  total_value?: number;
 };
 
 const readApiResponse = async (response: Response) => {
@@ -60,6 +62,8 @@ export default function StockInHistory() {
   const [page, setPage] = useState(1);
   const [totalRows, setTotalRows] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  const [totalQty, setTotalQty] = useState(0);
+  const [totalValue, setTotalValue] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -94,6 +98,8 @@ export default function StockInHistory() {
       setPage(data.page || page);
       setTotalRows(data.total ?? rows.length);
       setTotalPages(data.total_pages ?? (rows.length > 0 ? 1 : 0));
+      setTotalQty(data.total_qty ?? 0);
+      setTotalValue(data.total_value ?? 0);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         return;
@@ -104,6 +110,8 @@ export default function StockInHistory() {
       setHistory([]);
       setTotalRows(0);
       setTotalPages(0);
+      setTotalQty(0);
+      setTotalValue(0);
     } finally {
       if (!signal?.aborted) {
         setLoading(false);
@@ -123,8 +131,6 @@ export default function StockInHistory() {
     };
   }, [fetchHistory]);
 
-  const totalQty = history.reduce((sum, item) => sum + Number(item.qty || 0), 0);
-  const totalValue = history.reduce((sum, item) => sum + Number(item.total_cost || 0), 0);
   const firstRow = totalRows === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const lastRow = Math.min(page * PAGE_SIZE, totalRows);
   const visiblePages = Array.from(

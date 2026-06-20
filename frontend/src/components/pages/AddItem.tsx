@@ -1,8 +1,18 @@
 'use client'
 
 import { useEffect, useState } from "react";
-import { Package, Barcode, DollarSign, Calendar, Building2, Hash } from "lucide-react";
+import { Package, Barcode, Calendar, Hash } from "lucide-react";
 import { apiUrl } from "@/lib/api";
+
+type MasterOption = {
+  kode?: string;
+  nama?: string;
+  kdjns?: string;
+  kode_sat?: string;
+  satuan?: string;
+  kode_industri?: string;
+  nama_industri?: string;
+};
 
 export default function AddItem() {
   const [isObat, setIsObat] = useState(true);
@@ -12,6 +22,9 @@ export default function AddItem() {
   const [hargaApotek, setHargaApotek] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [noBatch, setNoBatch] = useState("");
+  const [noFaktur, setNoFaktur] = useState("");
+  const [tanggalPembelian, setTanggalPembelian] = useState("");
 
   const beli =
     Number(
@@ -72,12 +85,17 @@ export default function AddItem() {
     expired: ""
   });
 
-  const [masters,setMasters]=
-  useState({
-    satuan:[],
-    jenis:[],
-    golongan:[],
-    suppliers:[]
+  const [masters, setMasters] =
+  useState<{
+    satuan: MasterOption[];
+    jenis: MasterOption[];
+    golongan: MasterOption[];
+    suppliers: MasterOption[];
+  }>({
+    satuan: [],
+    jenis: [],
+    golongan: [],
+    suppliers: []
   })
 
   useEffect(() => {
@@ -107,6 +125,9 @@ export default function AddItem() {
       !formData.golongan ||
       !formData.jenis ||
       !formData.expired ||
+      !noBatch ||
+      !noFaktur ||
+      !tanggalPembelian ||
       !hargaBeli ||
       !hargaUmum ||
       !hargaUtama ||
@@ -147,7 +168,10 @@ export default function AddItem() {
 
           harga_utama: Number(String(hargaUtama).replace(/\./g,"")),
 
-          harga_apotek: Number(String(hargaApotek).replace(/\./g,"")),
+          harga_beli_luar: Number(String(hargaApotek).replace(/\./g,"")),
+          no_batch: noBatch,
+          no_faktur: noFaktur,
+          tanggal_pembelian: tanggalPembelian,
         
           expired: formData.expired
             ? `${formData.expired}T00:00:00Z`
@@ -179,6 +203,9 @@ export default function AddItem() {
         setHargaUmum("")
         setHargaUtama("")
         setHargaApotek("")
+        setNoBatch("");
+        setNoFaktur("");
+        setTanggalPembelian("");
         window.scrollTo({
           top: 0,
           behavior: "smooth"
@@ -296,7 +323,7 @@ export default function AddItem() {
               >
                 <option value="">Pilih golongan</option>
 
-                {masters.golongan.map((item: any) => (
+                {masters.golongan.map((item) => (
                   <option key={item.kode} value={item.kode}>
                     {item.nama}
                   </option>
@@ -314,12 +341,50 @@ export default function AddItem() {
             >
               <option value="">Pilih jenis</option>
 
-              {masters.jenis.map((item: any) => (
+              {masters.jenis.map((item) => (
                 <option key={item.kdjns} value={item.kdjns}>
                   {item.nama}
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm mb-2">No. Batch *</label>
+              <input
+                type="text"
+                placeholder="Masukkan nomor batch"
+                value={noBatch}
+                onChange={(e) => setNoBatch(e.target.value)}
+                className="w-full px-4 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div>
+              <label className="block text-sm mb-2">No. Faktur *</label>
+              <input
+                type="text"
+                placeholder="Masukkan nomor faktur"
+                value={noFaktur}
+                onChange={(e) => setNoFaktur(e.target.value)}
+                className="w-full px-4 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm mb-2">Tanggal Pembelian *</label>
+            <div className="relative">
+              <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+              <input
+                type="date"
+                min="2000-01-01"
+                max="2100-12-31"
+                value={tanggalPembelian}
+                onChange={(e) => setTanggalPembelian(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
           </div>
 
           {/* Supplier */}
@@ -345,7 +410,7 @@ export default function AddItem() {
                 Pilih supplier
               </option>
 
-              {masters.suppliers?.map((item:any)=>(
+              {masters.suppliers?.map((item) => (
                 <option
                   key={item.kode_industri}
 
@@ -368,7 +433,7 @@ export default function AddItem() {
               >
                 <option value="">Pilih satuan</option>
 
-                {masters.satuan.map((item: any) => (
+                {masters.satuan.map((item) => (
                   <option key={item.kode_sat} value={item.kode_sat}>
                     {item.satuan}
                   </option>
@@ -599,6 +664,9 @@ export default function AddItem() {
                 setHargaUmum("");
                 setHargaUtama("");
                 setHargaApotek("");
+                setNoBatch("");
+                setNoFaktur("");
+                setTanggalPembelian("");
                 setMessage("");
                 window.scrollTo({
                   top: 0,
@@ -619,6 +687,9 @@ export default function AddItem() {
                 !formData.golongan ||
                 !formData.jenis ||
                 !formData.expired ||
+                !noBatch ||
+                !noFaktur ||
+                !tanggalPembelian ||
                 !hargaBeli ||
                 !hargaUmum ||
                 !hargaUtama ||

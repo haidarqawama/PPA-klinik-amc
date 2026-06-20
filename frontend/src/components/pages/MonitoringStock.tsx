@@ -436,7 +436,8 @@ export default function MonitoringStock() {
               turnoverItems.map((item, index) => {
                 const turnoverStatus = getTurnoverStatus(item.turnover_ratio);
                 const color = TURNOVER_COLORS[index % TURNOVER_COLORS.length];
-                 return (
+
+                 return (
                   <div key={item.kode_brng} className="p-3 rounded-xl bg-muted/30 border border-border">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-3">

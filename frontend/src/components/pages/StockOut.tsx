@@ -12,11 +12,27 @@ type StockOutItem = {
   barcode: string;
   stok: number;
   sell_price: number;
+  harga_apotek: number;
+  harga_umum: number;
+  harga_utama: number;
   satuan: string;
   supplier: string;
   golongan: string;
   jenis: string;
   expire: string;
+};
+
+type StockOutBatchOption = {
+  no_batch: string;
+  no_faktur: string;
+  expired: string;
+  sisa: number;
+  h_beli: number;
+  sell_price: number;
+  harga_apotek: number;
+  harga_umum: number;
+  harga_utama: number;
+  tgl_beli: string;
 };
 
 type RecentStockOut = {
@@ -32,7 +48,11 @@ type RecentStockOut = {
   note: string;
 };
 
-const destinations = ["Pasien Umum", "Rawat Inap", "IGD", "Poli", "Ruang Operasi", "Seluruh Ruangan"];
+const destinations = [
+  { value: "Apotek", label: "Apotek", priceKey: "harga_apotek" },
+  { value: "Umum", label: "Umum", priceKey: "harga_umum" },
+  { value: "Utama (BPJS)", label: "Utama (BPJS)", priceKey: "harga_utama" },
+] as const;
 
 const formatNumberInput = (value: string) => {
   const digits = value.replace(/[^\d]/g, "");
@@ -42,6 +62,18 @@ const formatNumberInput = (value: string) => {
 
 const parseNumber = (value: string) => Number(value.replace(/\./g, "") || 0);
 const formatCurrency = (value: number) => `Rp ${Number(value || 0).toLocaleString('id-ID')}`;
+const getBatchValue = (batch: StockOutBatchOption) => `${batch.no_batch}||${batch.no_faktur}`;
+
+const getPriceByDestination = (item: StockOutItem | null, destination: string) => {
+  const selectedDestination = destinations.find((option) => option.value === destination);
+  if (!selectedDestination) {
+    return Number(item?.sell_price || 0);
+  }
+
+  const itemPrice = Number(item?.[selectedDestination.priceKey] || 0);
+
+  return itemPrice || Number(item?.sell_price || 0);
+};
 
 const readJson = async <T,>(response: Response): Promise<T> => {
   const text = await response.text();
@@ -61,6 +93,8 @@ export default function StockOut() {
   const [search, setSearch] = useState("");
   const [items, setItems] = useState<StockOutItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<StockOutItem | null>(null);
+  const [batches, setBatches] = useState<StockOutBatchOption[]>([]);
+  const [selectedBatch, setSelectedBatch] = useState<StockOutBatchOption | null>(null);
   const [recentStockOut, setRecentStockOut] = useState<RecentStockOut[]>([]);
   const [qty, setQty] = useState("");
   const [destination, setDestination] = useState("");
@@ -69,7 +103,9 @@ export default function StockOut() {
   const [loading, setLoading] = useState(false);
 
   const selectedQty = parseNumber(qty);
-  const stockError = Boolean(selectedItem && selectedQty > Number(selectedItem.stok || 0));
+  const realtimeStock = Number(selectedItem?.stok || 0);
+  const stockError = Boolean(selectedItem && selectedQty > realtimeStock);
+  const selectedUnitPrice = getPriceByDestination(selectedItem, destination);
 
   useEffect(() => {
     let ignore = false;
@@ -103,9 +139,7 @@ export default function StockOut() {
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       try {
-        const res = await fetch(apiUrl(`/api/stock-out/items?search=${encodeURIComponent(keyword)}`), {
-          signal: controller.signal,
-        });
+        const res = await fetch(apiUrl(`/api/stock-out/items?search=${encodeURIComponent(keyword)}`), { signal: controller.signal });
         const data = await readJson<{ data?: StockOutItem[] }>(res);
         setItems(data.data || []);
       } catch (error) {
@@ -120,6 +154,39 @@ export default function StockOut() {
       controller.abort();
     };
   }, [search, selectedItem]);
+
+  useEffect(() => {
+    if (!selectedItem) {
+      return;
+    }
+
+    const kodeBrng = selectedItem.kode_brng;
+    let ignore = false;
+
+    async function loadBatches() {
+      try {
+        const res = await fetch(apiUrl(`/api/stock-out/batches?kode_brng=${encodeURIComponent(kodeBrng)}`));
+        const data = await readJson<{ data?: StockOutBatchOption[]; error?: string }>(res);
+        if (!ignore) {
+          const nextBatches = data.data || [];
+          setBatches(nextBatches);
+          setSelectedBatch(nextBatches[0] || null);
+        }
+      } catch (error) {
+        if (!ignore) {
+          console.error(error);
+          setBatches([]);
+          setSelectedBatch(null);
+        }
+      }
+    }
+
+    loadBatches();
+
+    return () => {
+      ignore = true;
+    };
+  }, [selectedItem]);
 
   const fetchRecentStockOut = async () => {
     try {
@@ -137,6 +204,8 @@ export default function StockOut() {
   };
 
   const selectItem = (item: StockOutItem) => {
+    setBatches([]);
+    setSelectedBatch(null);
     setSelectedItem(item);
     setSearch(`${item.kode_brng} - ${item.nama_brng}`);
     setItems([]);
@@ -146,19 +215,21 @@ export default function StockOut() {
     setSearch("");
     setItems([]);
     setSelectedItem(null);
+    setBatches([]);
+    setSelectedBatch(null);
     setQty("");
     setDestination("");
     setNote("");
   };
 
   const handleSubmit = async () => {
-    if (!selectedItem || selectedQty <= 0 || !destination) {
-      showTemporaryMessage("Pilih barang, isi jumlah, dan pilih tujuan penggunaan");
+    if (!selectedItem || !selectedBatch || selectedQty <= 0 || !destination) {
+      showTemporaryMessage("Pilih barang, batch, isi jumlah, dan pilih tujuan penggunaan");
       return;
     }
 
     if (stockError) {
-      showTemporaryMessage("Jumlah keluar melebihi stok tersedia");
+      showTemporaryMessage("Jumlah keluar melebihi stok batch tersedia");
       return;
     }
 
@@ -170,6 +241,8 @@ export default function StockOut() {
         body: JSON.stringify({
           kode_brng: selectedItem.kode_brng,
           qty: selectedQty,
+          no_batch: selectedBatch.no_batch,
+          no_faktur: selectedBatch.no_faktur,
           destination,
           note,
         }),
@@ -195,9 +268,7 @@ export default function StockOut() {
   return (
     <div className="space-y-6">
       {message && (
-        <div className={`fixed top-6 right-6 z-50 px-5 py-3 rounded-xl shadow-lg text-white ${
-          message.includes("berhasil") ? "bg-green-500" : "bg-red-500"
-        }`}>
+        <div className={`fixed top-6 right-6 z-50 px-5 py-3 rounded-xl shadow-lg text-white ${message.includes("berhasil") ? "bg-green-500" : "bg-red-500"}`}>
           {message}
         </div>
       )}
@@ -230,6 +301,8 @@ export default function StockOut() {
                 onChange={(event) => {
                   setSearch(event.target.value);
                   setSelectedItem(null);
+                  setBatches([]);
+                  setSelectedBatch(null);
                   if (event.target.value.trim().length < 2) {
                     setItems([]);
                   }
@@ -266,16 +339,65 @@ export default function StockOut() {
                 <div className="flex-1">
                   <p className="font-semibold">{selectedItem.nama_brng}</p>
                   <p className="text-sm text-muted-foreground">
-                    Stok tersedia: {Number(selectedItem.stok).toLocaleString("id-ID")} {selectedItem.satuan || "unit"}
+                    Total stok tersedia: {Number(selectedItem.stok).toLocaleString("id-ID")} {selectedItem.satuan || "unit"}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {selectedItem.supplier || "Supplier tidak tersedia"} {selectedItem.golongan ? `- ${selectedItem.golongan}` : ""}
                   </p>
-                  <p className="text-sm text-primary mt-1">
-                    Harga jual: {formatCurrency(selectedItem.sell_price)} / {selectedItem.satuan || "unit"}
-                  </p>
                 </div>
               </div>
+
+              <div>
+                <label className="block text-sm mb-2">Pilih Batch *</label>
+                <select
+                  value={selectedBatch ? getBatchValue(selectedBatch) : ""}
+                  onChange={(event) => {
+                    const batch = batches.find((item) => getBatchValue(item) === event.target.value) || null;
+                    setSelectedBatch(batch);
+                  }}
+                  className="w-full px-4 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">Pilih batch</option>
+                  {batches.map((batch) => (
+                    <option key={getBatchValue(batch)} value={getBatchValue(batch)}>
+                      {batch.no_batch} - {batch.no_faktur || "tanpa faktur"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedBatch && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-3 rounded-xl bg-background border border-border">
+                    <p className="text-xs text-muted-foreground">No. Batch</p>
+                    <p className="text-sm font-medium text-foreground">{selectedBatch.no_batch || "-"}</p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-background border border-border">
+                    <p className="text-xs text-muted-foreground">No. Faktur</p>
+                    <p className="text-sm font-medium text-foreground">{selectedBatch.no_faktur || "-"}</p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-background border border-border">
+                    <p className="text-xs text-muted-foreground">Tanggal Expired</p>
+                    <p className="text-sm font-medium text-foreground">{formatDate(selectedBatch.expired) || "-"}</p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-background border border-border">
+                    <p className="text-xs text-muted-foreground">Stok Realtime</p>
+                    <p className="text-sm font-medium text-foreground">{Number(selectedItem.stok).toLocaleString("id-ID")} {selectedItem.satuan || "unit"}</p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-background border border-border">
+                    <p className="text-xs text-muted-foreground">Harga Apotek</p>
+                    <p className="text-sm font-medium text-foreground">{formatCurrency(selectedBatch.harga_apotek)}</p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-background border border-border">
+                    <p className="text-xs text-muted-foreground">Harga Umum</p>
+                    <p className="text-sm font-medium text-foreground">{formatCurrency(selectedBatch.harga_umum)}</p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-background border border-border">
+                    <p className="text-xs text-muted-foreground">Harga Utama (BPJS)</p>
+                    <p className="text-sm font-medium text-foreground">{formatCurrency(selectedBatch.harga_utama)}</p>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm mb-2">Jumlah Keluar ({selectedItem.satuan || "unit"}) *</label>
@@ -287,11 +409,7 @@ export default function StockOut() {
                     placeholder="0"
                     value={qty}
                     onChange={(event) => setQty(formatNumberInput(event.target.value))}
-                    className={`w-full pl-12 pr-4 py-3 bg-input-background border rounded-xl focus:outline-none focus:ring-2 ${
-                      stockError
-                        ? "border-destructive focus:ring-destructive"
-                        : "border-border focus:ring-primary"
-                    }`}
+                    className={`w-full pl-12 pr-4 py-3 bg-input-background border rounded-xl focus:outline-none focus:ring-2 ${stockError ? "border-destructive focus:ring-destructive" : "border-border focus:ring-primary"}`}
                   />
                 </div>
               </div>
@@ -302,19 +420,25 @@ export default function StockOut() {
                   <div>
                     <p className="text-sm font-medium text-destructive">Stok Tidak Mencukupi</p>
                     <p className="text-xs text-destructive/80 mt-0.5">
-                      Jumlah yang diminta melebihi stok tersedia ({Number(selectedItem.stok).toLocaleString("id-ID")} {selectedItem.satuan || "unit"})
+                      Jumlah yang diminta melebihi stok realtime ({Number(realtimeStock).toLocaleString("id-ID")} {selectedItem.satuan || "unit"})
                     </p>
                   </div>
                 </div>
               )}
 
-              {selectedQty > 0 && !stockError && (
+              {selectedQty > 0 && !stockError && selectedBatch && (
                 <div className="p-4 rounded-xl bg-primary/10 border border-primary/20">
-                  <div className="flex justify-between items-center gap-4">
-                    <span className="text-sm text-muted-foreground">Total Nilai</span>
-                    <span className="text-lg font-semibold text-primary">
-                      {formatCurrency(selectedQty * Number(selectedItem.sell_price || 0))}
-                    </span>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center gap-4">
+                      <span className="text-sm text-muted-foreground">Harga Satuan</span>
+                      <span className="text-sm font-medium text-foreground">{formatCurrency(selectedUnitPrice)}</span>
+                    </div>
+                    <div className="flex justify-between items-center gap-4">
+                      <span className="text-sm text-muted-foreground">Total Nilai</span>
+                      <span className="text-lg font-semibold text-primary">
+                        {formatCurrency(selectedQty * selectedUnitPrice)}
+                      </span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -330,7 +454,7 @@ export default function StockOut() {
                   >
                     <option value="">Pilih tujuan</option>
                     {destinations.map((item) => (
-                      <option key={item} value={item}>{item}</option>
+                      <option key={item.value} value={item.value}>{item.label}</option>
                     ))}
                   </select>
                 </div>
@@ -349,7 +473,7 @@ export default function StockOut() {
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={loading || stockError || selectedQty <= 0 || !destination}
+                disabled={loading || !selectedBatch || stockError || selectedQty <= 0 || !destination}
                 className="w-full py-3 px-6 rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? "Memproses..." : "Proses Barang Keluar"}
@@ -382,25 +506,18 @@ export default function StockOut() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-medium text-foreground">
-                        {formatCurrency(item.total_revenue)}
-                      </p>
+                      <p className="text-sm font-medium text-foreground">{formatCurrency(item.total_revenue)}</p>
                       <p className="text-xs text-muted-foreground">total</p>
                     </div>
                   </div>
                 </div>
               ))
             ) : (
-              <div className="p-8 text-center text-sm text-muted-foreground">
-                Belum ada riwayat barang keluar
-              </div>
+              <div className="p-8 text-center text-sm text-muted-foreground">Belum ada riwayat barang keluar</div>
             )}
           </div>
           <div className="p-4 border-t border-border">
-            <Link
-              href="/stockouthistory"
-              className="block w-full py-2.5 px-4 rounded-xl border border-border hover:bg-muted/50 transition-colors text-sm text-center"
-            >
+            <Link href="/stockouthistory" className="block w-full py-2.5 px-4 rounded-xl border border-border hover:bg-muted/50 transition-colors text-sm text-center">
               Lihat Semua Riwayat
             </Link>
           </div>
