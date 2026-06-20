@@ -200,7 +200,7 @@ func GetDashboard(c *gin.Context) {
 				WHERE tanggal IS NOT NULL
 				GROUP BY YEAR(tanggal), MONTH(tanggal)
 				ORDER BY YEAR(tanggal) DESC, MONTH(tanggal) DESC
-				LIMIT 5
+				LIMIT 4
 			) recent_months
 			ORDER BY month ASC
 		`).Scan(&stockMovement).Error
