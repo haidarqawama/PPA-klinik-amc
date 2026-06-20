@@ -1,0 +1,20 @@
+schema_version: 1
+module_path: error_handling
+title: Ad-hoc Inline Error Handling with Gin HTTP Responses
+scope: []
+source_files:
+    - backend/controllers/itemController.go
+    - backend/controllers/addItemController.go
+    - backend/controllers/stockInController.go
+    - backend/controllers/stockOutController.go
+    - backend/controllers/masterController.go
+    - backend/controllers/dashboard.go
+    - backend/controllers/supplierController.go
+    - backend/main.go
+    - frontend/src/lib/api.ts
+    - frontend/src/components/pages/StockIn.tsx
+    - frontend/src/components/pages/AddItem.tsx
+    - frontend/src/components/ui/sonner.tsx
+    - frontend/src/app/layout.tsx
+depends_on: []
+related_to: []

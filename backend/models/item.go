@@ -1,5 +1,21 @@
 package models
 
+// ItemPriceSnapshot represents price data for an item
+type ItemPriceSnapshot struct {
+	Dasar     float64 `gorm:"column:dasar"`
+	HBeli     float64 `gorm:"column:h_beli"`
+	Ralan     float64 `gorm:"column:ralan"`
+	Kelas1    float64 `gorm:"column:kelas1"`
+	Kelas2    float64 `gorm:"column:kelas2"`
+	Kelas3    float64 `gorm:"column:kelas3"`
+	Utama     float64 `gorm:"column:utama"`
+	Vip       float64 `gorm:"column:vip"`
+	Vvip      float64 `gorm:"column:vvip"`
+	Beliluar  float64 `gorm:"column:beliluar"`
+	Jualbebas float64 `gorm:"column:jualbebas"`
+	Karyawan  float64 `gorm:"column:karyawan"`
+}
+
 type Item struct {
 	KodeBrng      string  `json:"kode_brng" gorm:"column:kode_brng"`
 	NamaBrng      string  `json:"nama_brng" gorm:"column:nama_brng"`

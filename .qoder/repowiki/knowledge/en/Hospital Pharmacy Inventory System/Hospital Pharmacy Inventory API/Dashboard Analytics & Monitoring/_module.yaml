@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: backend/dashboard_monitoring
+title: Dashboard Analytics & Monitoring
+scope:
+    - backend/models/dashboard.go
+    - backend/controllers/dashboard.go
+    - backend/controllers/expireFilters.go
+    - backend/controllers/stockQuery.go
+source_files: []
+depends_on: []
+related_to:
+    - path: backend/stock_operations

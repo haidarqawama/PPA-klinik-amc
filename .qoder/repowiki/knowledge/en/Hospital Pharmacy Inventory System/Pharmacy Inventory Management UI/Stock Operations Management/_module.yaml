@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: frontend/stock_operations
+title: Stock Operations Management
+scope:
+    - frontend/src/components/pages/StockIn.tsx
+    - frontend/src/components/pages/StockOut.tsx
+    - frontend/src/components/pages/StockInHistory.tsx
+    - frontend/src/components/pages/StockOutHistory.tsx
+source_files: []
+depends_on: []
+related_to:
+    - path: backend/stock_operations

@@ -1,0 +1,1 @@
+Orchestrates a decoupled full-stack inventory management system by wiring a Go Gin backend API with a Next.js frontend UI through standardized HTTP/JSON contracts.

@@ -1,0 +1,3 @@
+- Adopts a client-side rendering model where the root `layout.tsx` provides global styling and fonts, while individual route pages wrap content in a shared `Layout` component for consistent navigation.
+- Centralizes backend communication through a single `src/lib/api.ts` utility that dynamically resolves the API base URL using environment variables or window location, ensuring all child modules connect to the same backend service.
+- Enforces a strict separation between page routing (`src/app`) and business logic/UI components (`src/components/pages`), with each route acting as a thin wrapper that imports its corresponding feature component.

@@ -5,37 +5,11 @@ import Link from "next/link";
 import { ArrowLeft, TrendingUp, Calendar, Search, User, Package, RefreshCw } from "lucide-react";
 import { formatDate } from '@/utils/dateFormat';
 import { apiUrl } from "@/lib/api";
+import type { StockInHistoryItem, StockInHistoryResponse } from "@/types/stockIn";
 
 const PAGE_SIZE = 100;
 
-type StockInHistoryItem = {
-  kode_brng: string;
-  nama_brng: string;
-  barcode: string;
-  qty: number;
-  unit: string;
-  buy_price: number;
-  total_cost: number;
-  expired: string;
-  date: string;
-  time: string;
-  supplier: string;
-  operator: string;
-  note: string;
-};
-
 const formatCurrency = (value: number) => `Rp ${Number(value || 0).toLocaleString('id-ID')}`;
-
-type StockInHistoryResponse = {
-  data?: StockInHistoryItem[];
-  error?: string;
-  page?: number;
-  limit?: number;
-  total?: number;
-  total_pages?: number;
-  total_qty?: number;
-  total_value?: number;
-};
 
 const readApiResponse = async (response: Response) => {
   const text = await response.text();

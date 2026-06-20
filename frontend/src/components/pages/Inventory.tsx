@@ -6,6 +6,7 @@ import { Search, Plus, Edit, Trash2, Package } from "lucide-react";
 import Link from 'next/link'
 import { formatDate } from '@/utils/dateFormat';
 import { apiUrl } from '@/lib/api';
+import type { FilterOption, MasterGolongan, MasterJenis, InventoryItem } from "@/types/inventory";
 
 const categoryColors = [
   "bg-yellow-100 text-yellow-700",
@@ -17,42 +18,6 @@ const categoryColors = [
   "bg-purple-100 text-purple-700",
   "bg-red-100 text-red-700"
 ];
-
-type FilterOption = {
-  id: string;
-  name: string;
-  color?: string;
-};
-
-type MasterGolongan = {
-  kode: string;
-  nama: string;
-};
-
-type MasterJenis = {
-  kdjns: string;
-  nama: string;
-};
-
-type InventoryItem = {
-  kode_brng: string;
-  nama_brng: string;
-  barcode?: string | null;
-  golongan?: string | null;
-  jenis?: string | null;
-  stok: number;
-  satuan?: string | null;
-  supplier?: string | null;
-  h_beli: number;
-  beliluar?: number;
-  ralan?: number;
-  utama?: number;
-  expire?: string | null;
-  no_batch?: string | null;
-  no_faktur?: string | null;
-  tgl_beli?: string | null;
-  tgl_kadaluarsa?: string | null;
-};
 
 const displayText = (value?: string | null) => {
   const normalized = value?.trim();

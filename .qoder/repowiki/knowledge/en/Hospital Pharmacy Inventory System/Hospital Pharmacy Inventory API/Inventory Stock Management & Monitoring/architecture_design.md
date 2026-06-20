@@ -1,0 +1,4 @@
+- **Layering**: Follows a flat MVC-like structure where `models` define DTOs/structs for API responses and requests, and `controllers` contain both HTTP handling logic and direct database access via GORM.
+- **Data Access**: Controllers interact directly with a shared global database instance (`config.SIK`) using raw SQL queries and GORM builders, bypassing a dedicated repository layer.
+- **Key Interfaces**: `StockInPayload` and `StockOutPayload` in models serve as the primary input contracts for mutation endpoints, while `MonitoringStockResponse` aggregates complex analytical data for dashboards.
+- **Boundaries**: The module is scoped to the 'AP' (Apotek/Pharmacy) ward (`kd_bangsal = 'AP'`), isolating its operations from other hospital wards within the broader system.

@@ -1,0 +1,4 @@
+- Entry points: `StockIn.tsx` and `StockOut.tsx` handle transaction forms; `StockInHistory.tsx` and `StockOutHistory.tsx` provide paginated audit logs.
+- Data flow: Components use `fetch` against `/api/stock-in/*` and `/api/stock-out/*` endpoints via `apiUrl` helper, managing local state for search, selection, and form inputs.
+- UI Structure: Split-view layout in transaction pages (form left, recent history right); full-table layout in history pages with server-side pagination and filtering.
+- Dependencies: Relies on `lucide-react` for iconography, `next/link` for navigation, and shared utilities (`dateFormat`, `api`) for consistency.

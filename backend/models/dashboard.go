@@ -1,5 +1,21 @@
 package models
 
+import "time"
+
+// DashboardCacheKey represents the cache key for dashboard data
+type DashboardCacheKey struct {
+	GolonganPage    int
+	GolonganLimit   int
+	ActivitiesPage  int
+	ActivitiesLimit int
+}
+
+// DashboardCacheEntry represents a cached dashboard response
+type DashboardCacheEntry struct {
+	Data      DashboardResponse
+	Timestamp time.Time
+}
+
 type DashboardSummary struct {
 	TotalItems        int64   `json:"total_items"`
 	TotalStock        int64   `json:"total_stock"`

@@ -1,0 +1,1 @@
+Manages medical inventory items with batch tracking, barcode support, pricing tiers, and supplier CRUD operations against a hospital information system database.

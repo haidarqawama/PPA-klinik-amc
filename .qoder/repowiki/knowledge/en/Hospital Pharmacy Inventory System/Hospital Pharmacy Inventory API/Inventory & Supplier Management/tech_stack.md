@@ -1,0 +1,1 @@
+Gin framework for HTTP routing; GORM ORM with manual raw SQL for complex aggregations; auto-incrementing item codes via B-prefixed sequential IDs (B000000001 format).

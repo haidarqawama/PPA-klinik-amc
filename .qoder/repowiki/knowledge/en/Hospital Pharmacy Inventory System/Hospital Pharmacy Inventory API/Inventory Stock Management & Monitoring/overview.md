@@ -1,0 +1,1 @@
+Manages pharmacy inventory inflows, outflows, and real-time stock health monitoring including expiration tracking and turnover analysis.

@@ -12,20 +12,8 @@ import (
 
 const dashboardCacheTTL = 30 * time.Second
 
-type dashboardCacheKey struct {
-	golonganPage    int
-	golonganLimit   int
-	activitiesPage  int
-	activitiesLimit int
-}
-
-type dashboardCacheEntry struct {
-	data      models.DashboardResponse
-	timestamp time.Time
-}
-
 var (
-	dashboardCache   = make(map[dashboardCacheKey]dashboardCacheEntry)
+	dashboardCache   = make(map[models.DashboardCacheKey]models.DashboardCacheEntry)
 	dashboardCacheMu sync.RWMutex
 )
 
@@ -46,18 +34,18 @@ func GetDashboard(c *gin.Context) {
 	activitiesPage := parseIntDefault(c.Query("activities_page"), 1)
 	activitiesLimit := parseIntDefault(c.Query("activities_limit"), 10)
 
-	cacheKey := dashboardCacheKey{
-		golonganPage:    golonganPage,
-		golonganLimit:   golonganLimit,
-		activitiesPage:  activitiesPage,
-		activitiesLimit: activitiesLimit,
+	cacheKey := models.DashboardCacheKey{
+		GolonganPage:    golonganPage,
+		GolonganLimit:   golonganLimit,
+		ActivitiesPage:  activitiesPage,
+		ActivitiesLimit: activitiesLimit,
 	}
 
 	// Serve cached response if still valid
 	dashboardCacheMu.RLock()
-	if entry, ok := dashboardCache[cacheKey]; ok && time.Since(entry.timestamp) < dashboardCacheTTL {
+	if entry, ok := dashboardCache[cacheKey]; ok && time.Since(entry.Timestamp) < dashboardCacheTTL {
 		dashboardCacheMu.RUnlock()
-		c.JSON(200, gin.H{"data": entry.data})
+		c.JSON(200, gin.H{"data": entry.Data})
 		return
 	}
 	dashboardCacheMu.RUnlock()
@@ -297,7 +285,7 @@ func GetDashboard(c *gin.Context) {
 	}
 
 	dashboardCacheMu.Lock()
-	dashboardCache[cacheKey] = dashboardCacheEntry{data: response, timestamp: time.Now()}
+	dashboardCache[cacheKey] = models.DashboardCacheEntry{Data: response, Timestamp: time.Now()}
 	dashboardCacheMu.Unlock()
 
 	c.JSON(200, gin.H{

@@ -1,0 +1,4 @@
+- All controller handlers accept *gin.Context as the sole parameter and return JSON responses via c.JSON with status codes.
+- Database access consistently uses config.SIK as the GORM connection handle across all controllers.
+- Models implement TableName() to override default table mappings when the struct name differs from the actual database table.
+- Write operations that span multiple tables use explicit transaction blocks (Begin/Commit/Rollback) with defer-recover panic handling.

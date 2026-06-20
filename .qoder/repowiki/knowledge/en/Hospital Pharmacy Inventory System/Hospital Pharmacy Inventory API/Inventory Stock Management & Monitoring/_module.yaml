@@ -1,0 +1,16 @@
+schema_version: 1
+module_path: backend/stock_operations
+title: Inventory Stock Management & Monitoring
+scope:
+    - backend/models/stockin.go
+    - backend/models/stockout.go
+    - backend/models/monitoringStock.go
+    - backend/controllers/stockInController.go
+    - backend/controllers/stockOutController.go
+    - backend/controllers/monitoringStockB.go
+source_files: []
+depends_on: []
+related_to:
+    - path: backend/dashboard_monitoring
+    - path: backend/inventory
+    - path: frontend/stock_operations

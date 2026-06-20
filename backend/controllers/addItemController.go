@@ -9,21 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type itemPriceSnapshot struct {
-	Dasar     float64 `gorm:"column:dasar"`
-	HBeli     float64 `gorm:"column:h_beli"`
-	Ralan     float64 `gorm:"column:ralan"`
-	Kelas1    float64 `gorm:"column:kelas1"`
-	Kelas2    float64 `gorm:"column:kelas2"`
-	Kelas3    float64 `gorm:"column:kelas3"`
-	Utama     float64 `gorm:"column:utama"`
-	Vip       float64 `gorm:"column:vip"`
-	Vvip      float64 `gorm:"column:vvip"`
-	Beliluar  float64 `gorm:"column:beliluar"`
-	Jualbebas float64 `gorm:"column:jualbebas"`
-	Karyawan  float64 `gorm:"column:karyawan"`
-}
-
 func AddItem(c *gin.Context) {
 	var item models.LocalItem
 
@@ -141,7 +126,7 @@ func AddItem(c *gin.Context) {
 		return
 	}
 
-	var prices itemPriceSnapshot
+	var prices models.ItemPriceSnapshot
 	if err := tx.Table("databarang").
 		Select("COALESCE(dasar, 0) AS dasar, COALESCE(h_beli, 0) AS h_beli, COALESCE(ralan, 0) AS ralan, COALESCE(kelas1, 0) AS kelas1, COALESCE(kelas2, 0) AS kelas2, COALESCE(kelas3, 0) AS kelas3, COALESCE(utama, 0) AS utama, COALESCE(vip, 0) AS vip, COALESCE(vvip, 0) AS vvip, COALESCE(beliluar, 0) AS beliluar, COALESCE(jualbebas, 0) AS jualbebas, COALESCE(karyawan, 0) AS karyawan").
 		Where("kode_brng = ?", item.KodeBarang).

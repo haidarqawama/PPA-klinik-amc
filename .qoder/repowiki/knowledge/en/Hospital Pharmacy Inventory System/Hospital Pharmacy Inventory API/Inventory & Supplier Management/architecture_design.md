@@ -1,0 +1,5 @@
+- Two-layer structure: models define GORM entities mapped to SIK database tables (databarang, barcode_obat, industrifarmasi), controllers expose Gin HTTP handlers for item/supplier CRUD.
+- Item model split: Item maps to the legacy databarang table with raw SQL joins; LocalItem targets a local items table for write operations; BarcodeItem and Supplier map directly to their respective tables.
+- Controllers use config.SIK as the shared GORM DB handle; addItemController wraps multi-table inserts (databarang, barcode_obat, gudangbarang, data_batch, riwayat_barang_medis) in explicit transactions with rollback on failure.
+- Read operations (GetItemByKode, GetItems) rely on complex raw SQL with LEFT JOINs to aggregate stock from gudangbarang, resolve supplier/unit/category names, and fetch latest batch/expiry data.
+- Delete cascades manually across barcode_obat, gudangbarang, data_batch before removing the master databarang record.

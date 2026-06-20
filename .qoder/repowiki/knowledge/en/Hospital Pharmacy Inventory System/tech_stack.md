@@ -1,0 +1,1 @@
+Go (Gin) backend and Next.js frontend communicate via REST/JSON over HTTP, with CORS enabled for cross-origin browser access.

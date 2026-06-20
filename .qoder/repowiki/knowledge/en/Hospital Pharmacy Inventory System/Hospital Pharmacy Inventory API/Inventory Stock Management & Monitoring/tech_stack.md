@@ -1,0 +1,1 @@
+Uses Gin for HTTP routing and GORM for ORM/SQL building, interacting with a MySQL-compatible database (evidenced by `DATE_FORMAT`, `CURDATE()`, and `IFNULL` usage).

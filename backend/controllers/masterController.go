@@ -8,43 +8,31 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type masterPayload struct {
-	Code string `json:"code"`
-	Name string `json:"name"`
-}
-
-type masterTableConfig struct {
-	Table      string
-	CodeCol    string
-	NameCol    string
-	EntityName string
-}
-
-func getMasterTableConfig(masterType string) (masterTableConfig, bool) {
+func getMasterTableConfig(masterType string) (models.MasterTableConfig, bool) {
 	switch strings.ToLower(masterType) {
 	case "golongan":
-		return masterTableConfig{
+		return models.MasterTableConfig{
 			Table:      "golongan_barang",
 			CodeCol:    "kode",
 			NameCol:    "nama",
 			EntityName: "golongan",
 		}, true
 	case "jenis":
-		return masterTableConfig{
+		return models.MasterTableConfig{
 			Table:      "jenis",
 			CodeCol:    "kdjns",
 			NameCol:    "nama",
 			EntityName: "jenis",
 		}, true
 	case "satuan":
-		return masterTableConfig{
+		return models.MasterTableConfig{
 			Table:      "kodesatuan",
 			CodeCol:    "kode_sat",
 			NameCol:    "satuan",
 			EntityName: "satuan",
 		}, true
 	default:
-		return masterTableConfig{}, false
+		return models.MasterTableConfig{}, false
 	}
 }
 
@@ -101,7 +89,7 @@ func AddMaster(c *gin.Context) {
 		return
 	}
 
-	var payload masterPayload
+	var payload models.MasterPayload
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
@@ -147,7 +135,7 @@ func UpdateMaster(c *gin.Context) {
 
 	code := strings.TrimSpace(c.Param("code"))
 
-	var payload masterPayload
+	var payload models.MasterPayload
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return

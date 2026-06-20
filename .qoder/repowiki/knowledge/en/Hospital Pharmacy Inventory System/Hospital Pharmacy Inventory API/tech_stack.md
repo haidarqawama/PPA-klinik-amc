@@ -1,0 +1,1 @@
+Go with Gin framework and GORM ORM, connecting to a MySQL-based Hospital Information System (HIS) database.

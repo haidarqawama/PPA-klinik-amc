@@ -5,11 +5,20 @@ import { AlertTriangle, Calendar, Package, Clock, Activity, RefreshCw, X, Search
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { formatDate, isValidExpireDate } from '@/utils/dateFormat';
 import { apiUrl } from '@/lib/api';
+import type {
+  MonitoringPeriod,
+  MonitoringStockSummary,
+  MonitoringStockLowItem,
+  MonitoringStockExpiringItem,
+  MonitoringStockTurnover,
+  MonitoringStockCoverage,
+  MonitoringStockGolonganStat,
+  MonitoringStockGolonganValue,
+  MonitoringStockResponse
+} from "@/types/monitoringStock";
 
 const MONITORING_REFRESH_MS = 30_000;
 const LIST_PREVIEW_LIMIT = 5;
-
-type MonitoringPeriod = "day" | "month" | "year" | "all";
 
 const MONITORING_PERIODS: { value: MonitoringPeriod; label: string }[] = [
   { value: "day", label: "30 Hari" },
@@ -19,76 +28,6 @@ const MONITORING_PERIODS: { value: MonitoringPeriod; label: string }[] = [
 ];
 
 const TURNOVER_COLORS = ["#00B4D8", "#38A169", "#805AD5", "#DD6B20", "#E53E3E"];
-
-interface MonitoringStockSummary {
-  critical_stock_count: number;
-  restock_needed_count: number;
-  expiring_soon_count: number;
-  expired_count: number;
-}
-
-interface MonitoringStockLowItem {
-  kode_brng: string;
-  nama_brng: string;
-  stok: number;
-  golongan: string;
-  status: "critical" | "warning";
-  satuan?: string;
-}
-
-interface MonitoringStockExpiringItem {
-  kode_brng: string;
-  nama_brng: string;
-  expire: string;
-  days_left: number;
-  batch: string;
-  status: "expired" | "expiring_soon" | "normal";
-}
-
-interface MonitoringStockTurnover {
-  kode_brng: string;
-  nama_brng: string;
-  barang_keluar: number;
-  persediaan_awal: number;
-  persediaan_akhir: number;
-  rata_rata_persediaan: number;
-  turnover_ratio: number;
-  satuan?: string;
-}
-
-interface MonitoringStockCoverage {
-  kode_brng: string;
-  nama_brng: string;
-  stok_saat_ini: number;
-  rata_rata_pemakaian_harian: number;
-  coverage_days: number;
-  status: "critical" | "warning" | "good";
-  satuan?: string;
-}
-
-interface MonitoringStockGolonganStat {
-  golongan: string;
-  total_stock: number;
-}
-
-interface MonitoringStockGolonganValue {
-  golongan: string;
-  item_count: number;
-  total_stock: number;
-  inventory_value: number;
-}
-
-interface MonitoringStockResponse {
-  summary: MonitoringStockSummary;
-  low_stock_items: MonitoringStockLowItem[];
-  expiring_items: MonitoringStockExpiringItem[];
-  turnover_items: MonitoringStockTurnover[];
-  coverage_items: MonitoringStockCoverage[];
-  golongan_stats: MonitoringStockGolonganStat[];
-  golongan_values: MonitoringStockGolonganValue[];
-  observation_days: number;
-  observation_period: string;
-}
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(value);

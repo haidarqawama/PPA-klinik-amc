@@ -1,0 +1,3 @@
+- All feature-specific UI logic is encapsulated in `src/components/pages` and imported by route handlers in `src/app`.
+- API endpoints are constructed using the centralized `apiUrl` helper from `src/lib/api.ts` rather than hardcoded strings.
+- Navigation state and active route highlighting are managed centrally within the `Layout` component using `usePathname`.

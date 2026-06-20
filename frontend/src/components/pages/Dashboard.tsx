@@ -26,66 +26,16 @@ import {
   Legend as RechartsLegend
 } from "recharts";
 import { apiUrl } from "@/lib/api";
-
-interface DashboardSummary {
-  total_items: number;
-  total_stock: number;
-  low_stock_count: number;
-  expiring_soon_count: number;
-  expired_count: number;
-  inventory_value: number;
-}
-
-interface DashboardDistribution {
-  label: string;
-  item_count: number;
-  total_stock: number;
-}
-
-interface DashboardExpiredItem {
-  kode_brng: string;
-  nama_brng: string;
-  expire: string | null;
-}
-
-interface DashboardStockMovement {
-  month: string;
-  barang_masuk: number;
-  barang_keluar: number;
-}
-
-interface DashboardRecentActivity {
-  id: number;
-  type: "masuk" | "keluar";
-  kode_brng: string;
-  nama_brng: string;
-  qty: number;
-  activity_date: string;
-  activity_time: string;
-  reference_no: string;
-}
-
-interface DashboardPagination {
-  page: number;
-  limit: number;
-  total: number;
-  total_pages: number;
-}
-
-interface DashboardPaginationMeta {
-  golongan: DashboardPagination;
-  activities: DashboardPagination;
-}
-
-interface DashboardResponse {
-  summary: DashboardSummary;
-  golongan_distribution: DashboardDistribution[];
-  location_stock: { location: string; total_stock: number }[];
-  stock_movement: DashboardStockMovement[];
-  recent_activities: DashboardRecentActivity[];
-  pagination: DashboardPaginationMeta;
-  expired_items?: DashboardExpiredItem[];
-}
+import type {
+  DashboardSummary,
+  DashboardDistribution,
+  DashboardExpiredItem,
+  DashboardStockMovement,
+  DashboardRecentActivity,
+  DashboardPagination,
+  DashboardPaginationMeta,
+  DashboardResponse
+} from "@/types/dashboard";
 
 const notifications = [
   {
