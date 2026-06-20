@@ -71,6 +71,18 @@ func ConnectDatabase() {
 		"CREATE INDEX idx_databarang_kode_golongan ON databarang (kode_golongan)",
 	)
 
+	ensureIndex(
+		"riwayat_barang_medis",
+		"idx_rbm_stockin_summary",
+		"CREATE INDEX idx_rbm_stockin_summary ON riwayat_barang_medis (kd_bangsal, kode_brng, masuk)",
+	)
+
+	ensureIndex(
+		"riwayat_barang_medis",
+		"idx_rbm_stockout_summary",
+		"CREATE INDEX idx_rbm_stockout_summary ON riwayat_barang_medis (kd_bangsal, kode_brng, no_faktur, keluar)",
+	)
+
 	fmt.Println(
 		"Database connected",
 	)

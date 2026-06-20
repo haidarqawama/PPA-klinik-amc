@@ -299,31 +299,6 @@ export default function MonitoringStock() {
             Pantau kondisi stok dan status barang
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex gap-1 p-1 bg-muted rounded-xl">
-            {MONITORING_PERIODS.map((item) => (
-              <button
-                key={item.value}
-                onClick={() => handlePeriodChange(item.value)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                  period === item.value
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={() => fetchMonitoring({ silent: true })}
-            disabled={refreshing}
-            className="p-2 rounded-xl border border-border hover:bg-muted/50 transition-colors"
-            title="Refresh"
-          >
-            <RefreshCw className={`w-4 h-4 text-muted-foreground ${refreshing ? "animate-spin" : ""}`} />
-          </button>
-        </div>
       </div>
 
       {error && (

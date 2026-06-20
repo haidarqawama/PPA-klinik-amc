@@ -28,7 +28,7 @@ func monitoringObservationDays(period string) int {
 	}
 }
 
-func monitoringObservationLabel(period string, days int) string {
+func monitoringObservationLabel(period string) string {
 	switch period {
 	case "day":
 		return "30 hari terakhir"
@@ -157,7 +157,7 @@ func GetMonitoringStock(c *gin.Context) {
 		SELECT COUNT(*)
 		FROM databarang
 		WHERE expire < CURDATE()
-		`+validExpireDateWhere+`
+		` + validExpireDateWhere + `
 	`).Scan(&expiredCount).Error; err != nil {
 		c.JSON(500, gin.H{"error": "Gagal mengambil data expired", "detail": err.Error()})
 		return
@@ -357,7 +357,7 @@ func GetMonitoringStock(c *gin.Context) {
 		GolonganStats:     golonganStats,
 		GolonganValues:    golonganValues,
 		ObservationDays:   observationDays,
-		ObservationPeriod: monitoringObservationLabel(period, observationDays),
+		ObservationPeriod: monitoringObservationLabel(period),
 	}
 
 	c.JSON(200, gin.H{

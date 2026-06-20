@@ -313,6 +313,36 @@ func stockOutHistoryQuery() *gorm.DB {
 }
 
 func stockOutHistorySummaryQuery(search string, date string) *gorm.DB {
+	// Tanpa search, pre-aggregate per (kode_brng, no_faktur) dulu sebelum join databarang.
+	// Harga tergantung no_faktur, jadi kita perlu grouping level ini agar bisa menerapkan
+	// CASE expression di luar dengan benar. Join barcode_obat juga tidak diperlukan di summary.
+	if search == "" {
+		subQ := config.SIK.
+			Table("riwayat_barang_medis r").
+			Select("r.kode_brng, r.no_faktur, SUM(r.keluar) AS total_keluar").
+			Where("r.kd_bangsal = 'AP'").
+			Where("r.keluar > 0")
+
+		if date != "" {
+			subQ = subQ.Where("r.tanggal = ?", date)
+		}
+
+		subQ = subQ.Group("r.kode_brng, r.no_faktur")
+
+		return config.SIK.
+			Table("(?) AS t", subQ).
+			Select(`
+				COALESCE(SUM(t.total_keluar), 0) AS total_qty,
+				COALESCE(SUM(t.total_keluar * CASE
+					WHEN t.no_faktur = 'Apotek' THEN COALESCE(NULLIF(databarang.beliluar, 0), NULLIF(databarang.ralan, 0), NULLIF(databarang.jualbebas, 0), databarang.utama, 0)
+					WHEN t.no_faktur = 'Utama (BPJS)' THEN COALESCE(NULLIF(databarang.utama, 0), NULLIF(databarang.ralan, 0), NULLIF(databarang.jualbebas, 0), databarang.beliluar, 0)
+					ELSE COALESCE(NULLIF(databarang.ralan, 0), NULLIF(databarang.jualbebas, 0), NULLIF(databarang.beliluar, 0), databarang.utama, 0)
+				END), 0) AS total_value
+			`).
+			Joins("LEFT JOIN databarang ON t.kode_brng = databarang.kode_brng")
+	}
+
+	// Jika ada search, filter harus diterapkan per baris sebelum aggregate.
 	query := config.SIK.
 		Table("riwayat_barang_medis r").
 		Select(`
@@ -326,19 +356,17 @@ func stockOutHistorySummaryQuery(search string, date string) *gorm.DB {
 		Joins("LEFT JOIN databarang ON r.kode_brng = databarang.kode_brng").
 		Joins("LEFT JOIN barcode_obat ON r.kode_brng = barcode_obat.kode_brng").
 		Where("r.kd_bangsal = 'AP'").
-		Where("COALESCE(r.keluar, 0) > 0")
+		Where("r.keluar > 0")
 
-	if search != "" {
-		likeSearch := "%" + search + "%"
-		query = query.Where(`
-			r.kode_brng LIKE ?
-			OR databarang.nama_brng LIKE ?
-			OR barcode_obat.barcode LIKE ?
-			OR r.petugas LIKE ?
-			OR r.no_faktur LIKE ?
-			OR r.keterangan LIKE ?
-		`, likeSearch, likeSearch, likeSearch, likeSearch, likeSearch, likeSearch)
-	}
+	likeSearch := "%" + search + "%"
+	query = query.Where(`
+		r.kode_brng LIKE ?
+		OR databarang.nama_brng LIKE ?
+		OR barcode_obat.barcode LIKE ?
+		OR r.petugas LIKE ?
+		OR r.no_faktur LIKE ?
+		OR r.keterangan LIKE ?
+	`, likeSearch, likeSearch, likeSearch, likeSearch, likeSearch, likeSearch)
 
 	if date != "" {
 		query = query.Where("r.tanggal = ?", date)

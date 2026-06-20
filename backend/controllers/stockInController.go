@@ -175,21 +175,48 @@ func GetStockInHistory(c *gin.Context) {
 }
 
 func stockInHistorySummaryQuery(search string, date string) *gorm.DB {
+	// Tanpa search, pre-aggregate per kode_brng dulu sebelum join databarang.
+	// Ini mengubah join "satu row per transaksi" menjadi "satu row per barang",
+	// drastis mengurangi beban join dan I/O.
+	if search == "" {
+		subQ := config.SIK.
+			Table("riwayat_barang_medis r").
+			Select("r.kode_brng, SUM(r.masuk) AS total_masuk").
+			Where("r.kd_bangsal = 'AP'").
+			Where("r.masuk > 0")
+
+		if date != "" {
+			subQ = subQ.Where("r.tanggal = ?", date)
+		}
+
+		subQ = subQ.Group("r.kode_brng")
+
+		return config.SIK.
+			Table("(?) AS t", subQ).
+			Select(`
+				COALESCE(SUM(t.total_masuk), 0) AS total_qty,
+				COALESCE(SUM(t.total_masuk * COALESCE(databarang.h_beli, 0)), 0) AS total_value
+			`).
+			Joins("LEFT JOIN databarang ON t.kode_brng = databarang.kode_brng")
+	}
+
+	// Jika ada search, filter harus diterapkan per baris sebelum aggregate,
+	// sehingga tetap perlu join semua tabel yang digunakan untuk pencarian.
 	query := config.SIK.
 		Table("riwayat_barang_medis r").
 		Select(`
-			COALESCE(SUM(COALESCE(r.masuk, 0)), 0) AS total_qty,
-			COALESCE(SUM(COALESCE(r.masuk, 0) * COALESCE(databarang.h_beli, 0)), 0) AS total_value
+			COALESCE(SUM(r.masuk), 0) AS total_qty,
+			COALESCE(SUM(r.masuk * COALESCE(databarang.h_beli, 0)), 0) AS total_value
 		`).
 		Joins("LEFT JOIN databarang ON r.kode_brng = databarang.kode_brng").
+		Where("r.kd_bangsal = 'AP'").
+		Where("r.masuk > 0")
+
+	likeSearch := "%" + search + "%"
+	query = query.
 		Joins("LEFT JOIN barcode_obat ON r.kode_brng = barcode_obat.kode_brng").
 		Joins("LEFT JOIN industrifarmasi ON databarang.kode_industri = industrifarmasi.kode_industri").
-		Where("r.kd_bangsal = 'AP'").
-		Where("COALESCE(r.masuk, 0) > 0")
-
-	if search != "" {
-		likeSearch := "%" + search + "%"
-		query = query.Where(`
+		Where(`
 			r.kode_brng LIKE ?
 			OR databarang.nama_brng LIKE ?
 			OR barcode_obat.barcode LIKE ?
@@ -197,7 +224,6 @@ func stockInHistorySummaryQuery(search string, date string) *gorm.DB {
 			OR industrifarmasi.nama_industri LIKE ?
 			OR r.keterangan LIKE ?
 		`, likeSearch, likeSearch, likeSearch, likeSearch, likeSearch, likeSearch)
-	}
 
 	if date != "" {
 		query = query.Where("r.tanggal = ?", date)

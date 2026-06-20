@@ -187,21 +187,19 @@ func GetDashboard(c *gin.Context) {
 	}()
 
 	// 5. Stock movement (last 5 months)
+	// 5. Stock movement (last 4 months)
 	go func() {
 		defer wg.Done()
 		e := config.SIK.Raw(`
-			SELECT *
-			FROM (
-				SELECT
-					DATE_FORMAT(tanggal, '%Y-%m') AS month,
-					SUM(masuk) AS barang_masuk,
-					SUM(keluar) AS barang_keluar
-				FROM riwayat_barang_medis
-				WHERE tanggal IS NOT NULL
-				GROUP BY YEAR(tanggal), MONTH(tanggal)
-				ORDER BY YEAR(tanggal) DESC, MONTH(tanggal) DESC
-				LIMIT 4
-			) recent_months
+			SELECT
+				DATE_FORMAT(tanggal, '%Y-%m') AS month,
+				SUM(masuk)  AS barang_masuk,
+				SUM(keluar) AS barang_keluar
+			FROM riwayat_barang_medis
+			WHERE kd_bangsal = 'AP'
+				AND tanggal >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 3 MONTH), '%Y-%m-01')
+				AND tanggal <  DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 1 MONTH), '%Y-%m-01')
+			GROUP BY DATE_FORMAT(tanggal, '%Y-%m')
 			ORDER BY month ASC
 		`).Scan(&stockMovement).Error
 		captureErr(e)
