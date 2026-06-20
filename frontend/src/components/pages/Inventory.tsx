@@ -37,12 +37,12 @@ type MasterJenis = {
 type InventoryItem = {
   kode_brng: string;
   nama_brng: string;
-  barcode?: string;
-  golongan?: string;
-  jenis?: string;
+  barcode?: string | null;
+  golongan?: string | null;
+  jenis?: string | null;
   stok: number;
-  satuan?: string;
-  supplier?: string;
+  satuan?: string | null;
+  supplier?: string | null;
   h_beli: number;
   beliluar?: number;
   ralan?: number;
@@ -52,6 +52,11 @@ type InventoryItem = {
   no_faktur?: string | null;
   tgl_beli?: string | null;
   tgl_kadaluarsa?: string | null;
+};
+
+const displayText = (value?: string | null) => {
+  const normalized = value?.trim();
+  return normalized ? normalized : "-";
 };
 
 export default function Inventory() {
@@ -168,10 +173,19 @@ export default function Inventory() {
   }
 
   const getCategoryBadge = (category: string) => {
-    const type = medicineTypes.find(t => t.id === category);
+    const normalized = category?.trim();
+    if (!normalized) {
+      return {
+        id: "",
+        name: "-",
+        color: "bg-gray-100 text-gray-700",
+      };
+    }
+
+    const type = medicineTypes.find((t) => t.id === normalized);
     return type || {
-      id: category,
-      name: category || "-",
+      id: normalized,
+      name: normalized,
       color: "bg-gray-100 text-gray-700"
     };
   };
@@ -185,6 +199,11 @@ export default function Inventory() {
   };
 
   const filteredData = (items || []).filter(item => {
+    // Sembunyikan baris yang punya no_faktur tapi no_batch-nya kosong
+    const hasFaktur = item.no_faktur?.trim();
+    const hasBatch = item.no_batch?.trim();
+    if (hasFaktur && !hasBatch) return false;
+
     const normalizedSearch = searchQuery.toLowerCase();
     const matchesSearch =
       item.nama_brng?.toLowerCase().includes(normalizedSearch) ||
@@ -306,9 +325,9 @@ export default function Inventory() {
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto overflow-y-auto max-h-[65vh]">
           <table className="w-full">
-            <thead className="bg-muted/30 border-b border-border">
+            <thead className="bg-muted/30 border-b border-border sticky top-0 z-10">
               <tr>
                 <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Kode Barang
@@ -362,7 +381,7 @@ export default function Inventory() {
             </thead>
             <tbody className="bg-card divide-y divide-border">
               {paginatedItems.map((item, index) => {
-                const badge = getCategoryBadge(item.golongan || "all");
+                const badge = getCategoryBadge(item.golongan || "");
                 return (
                   <tr key={`${item.kode_brng}-${item.no_batch || index}-${item.no_faktur || index}`} className="hover:bg-muted/20 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -371,20 +390,20 @@ export default function Inventory() {
                           <Package className="w-5 h-5 text-primary" />
                         </div>
                         <div>
-                          <p className="font-medium text-foreground">{item.kode_brng}</p>
+                          <p className="font-medium text-foreground">{displayText(item.kode_brng)}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-3">
                         <div>
-                          <p className="font-medium text-foreground">{item.nama_brng}</p>
-                          <p className="text-sm text-muted-foreground">{item.supplier || '-'}</p>
+                          <p className="font-medium text-foreground">{displayText(item.nama_brng)}</p>
+                          <p className="text-sm text-muted-foreground">{displayText(item.supplier)}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground font-mono">
-                      {item.barcode || '-'}
+                      {displayText(item.barcode)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${badge.color}`}>
@@ -393,7 +412,7 @@ export default function Inventory() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
                     <span>
-                      {item.jenis || "-"}
+                      {displayText(item.jenis)}
                     </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -402,7 +421,7 @@ export default function Inventory() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
-                      {item.satuan || '-'}
+                      {displayText(item.satuan)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
                       {formatCurrency(item.h_beli)}
@@ -423,10 +442,10 @@ export default function Inventory() {
                       {formatDate(item.tgl_kadaluarsa || item.expire) || "-"}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
-                      {item.no_batch || "-"}
+                      {displayText(item.no_batch)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
-                      {item.no_faktur || "-"}
+                      {displayText(item.no_faktur)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <div className="flex gap-2">
