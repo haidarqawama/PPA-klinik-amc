@@ -21,9 +21,9 @@ type DashboardLocation struct {
 }
 
 type DashboardStockMovement struct {
-	Month        string `json:"month"`
-	BarangMasuk  float64  `json:"barang_masuk"`
-	BarangKeluar float64  `json:"barang_keluar"`
+	Month        string  `json:"month"`
+	BarangMasuk  float64 `json:"barang_masuk"`
+	BarangKeluar float64 `json:"barang_keluar"`
 }
 
 type DashboardRecentActivity struct {
@@ -37,10 +37,23 @@ type DashboardRecentActivity struct {
 	ReferenceNo  string `json:"reference_no" gorm:"column:reference_no"`
 }
 
+type DashboardPagination struct {
+	Page       int   `json:"page"`
+	Limit      int   `json:"limit"`
+	Total      int64 `json:"total"`
+	TotalPages int64 `json:"total_pages"`
+}
+
+type DashboardPaginationMeta struct {
+	Golongan   DashboardPagination `json:"golongan"`
+	Activities DashboardPagination `json:"activities"`
+}
+
 type DashboardResponse struct {
 	Summary              DashboardSummary          `json:"summary"`
 	GolonganDistribution []DashboardDistribution   `json:"golongan_distribution"`
 	LocationStock        []DashboardLocation       `json:"location_stock"`
 	StockMovement        []DashboardStockMovement  `json:"stock_movement"`
 	RecentActivities     []DashboardRecentActivity `json:"recent_activities"`
+	Pagination           DashboardPaginationMeta   `json:"pagination"`
 }
