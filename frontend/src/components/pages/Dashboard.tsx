@@ -7,6 +7,7 @@ import {
   Calendar,
   TrendingUp,
   TrendingDown,
+  Banknote,
   DollarSign,
   Bell,
   X
@@ -426,7 +427,7 @@ export default function Dashboard() {
                 <p className="text-xs text-success mt-1">Keuntungan: Rp52M</p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-success/10 flex items-center justify-center">
-                <DollarSign className="w-6 h-6 text-success" />
+                <Banknote className="w-6 h-6 text-success" />
               </div>
             </div>
           </div>
