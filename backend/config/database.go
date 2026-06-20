@@ -54,27 +54,21 @@ func ConnectDatabase() {
 	)
 
 	ensureIndex(
-		"riwayat_barang_medis",
-		"idx_rbm_stock_in_history",
-		"CREATE INDEX idx_rbm_stock_in_history ON riwayat_barang_medis (kd_bangsal, masuk, tanggal, jam)",
-	)
-
-	ensureIndex(
-		"riwayat_barang_medis",
-		"idx_rbm_stock_out_history",
-		"CREATE INDEX idx_rbm_stock_out_history ON riwayat_barang_medis (kd_bangsal, keluar, tanggal, jam)",
-	)
-
-	ensureIndex(
 		"gudangbarang",
-		"idx_gudangbarang_ap_stock",
-		"CREATE INDEX idx_gudangbarang_ap_stock ON gudangbarang (kd_bangsal, stok, kode_brng)",
+		"idx_gudangbarang_bangsal_brng",
+		"CREATE INDEX idx_gudangbarang_bangsal_brng ON gudangbarang (kd_bangsal, kode_brng)",
 	)
 
 	ensureIndex(
-		"barcode_obat",
-		"idx_barcode_obat_barcode",
-		"CREATE INDEX idx_barcode_obat_barcode ON barcode_obat (barcode)",
+		"databarang",
+		"idx_databarang_expire",
+		"CREATE INDEX idx_databarang_expire ON databarang (expire)",
+	)
+
+	ensureIndex(
+		"databarang",
+		"idx_databarang_kode_golongan",
+		"CREATE INDEX idx_databarang_kode_golongan ON databarang (kode_golongan)",
 	)
 
 	fmt.Println(

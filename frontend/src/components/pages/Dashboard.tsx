@@ -7,6 +7,7 @@ import {
   Calendar,
   TrendingUp,
   TrendingDown,
+  Banknote,
   DollarSign,
   Bell,
   X
@@ -64,12 +65,25 @@ interface DashboardRecentActivity {
   reference_no: string;
 }
 
+interface DashboardPagination {
+  page: number;
+  limit: number;
+  total: number;
+  total_pages: number;
+}
+
+interface DashboardPaginationMeta {
+  golongan: DashboardPagination;
+  activities: DashboardPagination;
+}
+
 interface DashboardResponse {
   summary: DashboardSummary;
   golongan_distribution: DashboardDistribution[];
   location_stock: { location: string; total_stock: number }[];
   stock_movement: DashboardStockMovement[];
   recent_activities: DashboardRecentActivity[];
+  pagination: DashboardPaginationMeta;
   expired_items?: DashboardExpiredItem[];
 }
 
@@ -151,11 +165,22 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const unreadCount = notifications.filter(n => !n.read).length;
 
+  const [golonganPage, setGolonganPage] = useState(1);
+  const [activitiesPage, setActivitiesPage] = useState(1);
+  const [pagination, setPagination] = useState<DashboardPaginationMeta | null>(null);
+  const itemsPerPage = 10;
+
   useEffect(() => {
     async function fetchDashboard() {
       try {
         setLoading(true);
-        const response = await fetch(apiUrl("/api/dashboard"));
+        const params = new URLSearchParams({
+          golongan_page: String(golonganPage),
+          golongan_limit: String(itemsPerPage),
+          activities_page: String(activitiesPage),
+          activities_limit: String(itemsPerPage),
+        });
+        const response = await fetch(apiUrl(`/api/dashboard?${params.toString()}`));
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
@@ -166,6 +191,7 @@ export default function Dashboard() {
         setDistribution(data.golongan_distribution || []);
         setStockMovement(data.stock_movement || []);
         setRecentActivities(data.recent_activities || []);
+        setPagination(data.pagination || null);
         setExpiredCount(
           data.summary.expired_count ?? data.expired_items?.length ?? null
         );
@@ -175,6 +201,7 @@ export default function Dashboard() {
         setDistribution([]);
         setStockMovement([]);
         setRecentActivities([]);
+        setPagination(null);
         setExpiredCount(null);
         setDashboardError("Gagal memuat dashboard dari server");
         console.error(error);
@@ -184,7 +211,7 @@ export default function Dashboard() {
     }
 
     fetchDashboard();
-  }, []);
+  }, [golonganPage, activitiesPage]);
 
   const categoryData = distribution.length
     ? distribution.map((item, index) => ({
@@ -426,7 +453,7 @@ export default function Dashboard() {
                 <p className="text-xs text-success mt-1">Keuntungan: Rp52M</p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-success/10 flex items-center justify-center">
-                <DollarSign className="w-6 h-6 text-success" />
+                <Banknote className="w-6 h-6 text-success" />
               </div>
             </div>
           </div>
@@ -543,6 +570,29 @@ export default function Dashboard() {
               Belum ada data distribusi golongan barang
             </div>
           )}
+          {pagination && pagination.golongan.total_pages > 1 && (
+            <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
+              <p className="text-sm text-muted-foreground">
+                Halaman {golonganPage} dari {pagination.golongan.total_pages}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setGolonganPage(p => Math.max(1, p - 1))}
+                  disabled={golonganPage === 1 || loading}
+                  className="px-3 py-1.5 rounded-lg border border-border hover:bg-muted/50 transition-colors text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Sebelumnya
+                </button>
+                <button
+                  onClick={() => setGolonganPage(p => Math.min(pagination.golongan.total_pages, p + 1))}
+                  disabled={golonganPage === pagination.golongan.total_pages || loading}
+                  className="px-3 py-1.5 rounded-lg border border-border hover:bg-muted/50 transition-colors text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Selanjutnya
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -588,6 +638,29 @@ export default function Dashboard() {
             </div>
           )}
         </div>
+        {pagination && pagination.activities.total_pages > 1 && (
+          <div className="p-4 border-t border-border flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              Halaman {activitiesPage} dari {pagination.activities.total_pages}
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setActivitiesPage(p => Math.max(1, p - 1))}
+                disabled={activitiesPage === 1 || loading}
+                className="px-3 py-1.5 rounded-lg border border-border hover:bg-muted/50 transition-colors text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Sebelumnya
+              </button>
+              <button
+                onClick={() => setActivitiesPage(p => Math.min(pagination.activities.total_pages, p + 1))}
+                disabled={activitiesPage === pagination.activities.total_pages || loading}
+                className="px-3 py-1.5 rounded-lg border border-border hover:bg-muted/50 transition-colors text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Selanjutnya
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

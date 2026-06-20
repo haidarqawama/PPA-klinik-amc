@@ -155,8 +155,6 @@ export default function MonitoringStock() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [showAllLowStock, setShowAllLowStock] = useState(false);
-  const [showAllExpiring, setShowAllExpiring] = useState(false);
 
   const [activeDetailType, setActiveDetailType] = useState<"critical" | "restock" | "expiring_soon" | "expired" | null>(null);
   const [detailItems, setDetailItems] = useState<any[]>([]);
@@ -284,12 +282,8 @@ export default function MonitoringStock() {
   };
   const lowStockItems = data?.low_stock_items ?? [];
   const expiringItems = data?.expiring_items ?? [];
-  const visibleLowStockItems = showAllLowStock
-    ? lowStockItems
-    : lowStockItems.slice(0, LIST_PREVIEW_LIMIT);
-  const visibleExpiringItems = showAllExpiring
-    ? expiringItems
-    : expiringItems.slice(0, LIST_PREVIEW_LIMIT);
+  const visibleLowStockItems = lowStockItems.slice(0, LIST_PREVIEW_LIMIT);
+  const visibleExpiringItems = expiringItems.slice(0, LIST_PREVIEW_LIMIT);
   const turnoverItems = data?.turnover_items ?? [];
   const coverageItems = data?.coverage_items ?? [];
   const golonganStats = data?.golongan_stats ?? [];
@@ -610,12 +604,10 @@ export default function MonitoringStock() {
               <div className="p-4 border-t border-border">
                 <button
                   type="button"
-                  onClick={() => setShowAllLowStock((prev) => !prev)}
+                  onClick={() => openDetailModal("critical")}
                   className="w-full py-2.5 px-4 rounded-xl border border-border hover:bg-muted/50 transition-colors text-sm text-primary font-medium"
                 >
-                  {showAllLowStock
-                    ? "Tampilkan Lebih Sedikit"
-                    : "Lihat Semua Barang"}
+                  Lihat Semua Barang
                 </button>
               </div>
             )}
@@ -690,12 +682,10 @@ export default function MonitoringStock() {
               <div className="p-4 border-t border-border">
                 <button
                   type="button"
-                  onClick={() => setShowAllExpiring((prev) => !prev)}
+                  onClick={() => openDetailModal("expired")}
                   className="w-full py-2.5 px-4 rounded-xl border border-border hover:bg-muted/50 transition-colors text-sm text-primary font-medium"
                 >
-                  {showAllExpiring
-                    ? "Tampilkan Lebih Sedikit"
-                    : "Lihat Semua Barang"}
+                  Lihat Semua Barang
                 </button>
               </div>
             )}
