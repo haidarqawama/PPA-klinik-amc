@@ -9,7 +9,6 @@ import {
   TrendingUp,
   TrendingDown,
   Activity,
-  FileText,
   Building2,
   Tags,
   Menu,
@@ -34,7 +33,6 @@ export function Layout({
     { name: "Monitoring Stok", href: "/monitoring", icon: Activity },
     { name: "Master Data", href: "/master-data", icon: Tags },
     { name: "Supplier", href: "/supplier", icon: Building2 },
-    { name: "Laporan", href: "/reports", icon: FileText },
   ];
 
   return (
