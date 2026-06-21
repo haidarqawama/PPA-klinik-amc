@@ -1,1 +1,0 @@
-Orchestrates medical inventory management, stock operations, and real-time analytics through a unified Gin-based REST API connected to a hospital information system database.

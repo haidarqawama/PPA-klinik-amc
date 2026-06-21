@@ -6,7 +6,8 @@ import { Search, Plus, Edit, Trash2, Package } from "lucide-react";
 import Link from 'next/link'
 import { formatDate } from '@/utils/dateFormat';
 import { apiUrl } from '@/lib/api';
-import type { FilterOption, MasterGolongan, MasterJenis, InventoryItem } from "@/types/inventory";
+import type { FilterOption, InventoryItem } from "@/types/inventory";
+import type { MasterGolongan, MasterJenis } from "@/types/master";
 
 const categoryColors = [
   "bg-yellow-100 text-yellow-700",
@@ -164,11 +165,6 @@ export default function Inventory() {
   };
 
   const filteredData = (items || []).filter(item => {
-    // Sembunyikan baris yang punya no_faktur tapi no_batch-nya kosong
-    const hasFaktur = item.no_faktur?.trim();
-    const hasBatch = item.no_batch?.trim();
-    if (hasFaktur && !hasBatch) return false;
-
     const normalizedSearch = searchQuery.toLowerCase();
     const matchesSearch =
       item.nama_brng?.toLowerCase().includes(normalizedSearch) ||
@@ -415,7 +411,7 @@ export default function Inventory() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <div className="flex gap-2">
                       <Link
-                        href={`/inventory/edit/${item.kode_brng}`}
+                        href={`/inventory/edit/${item.kode_brng}?no_batch=${encodeURIComponent(item.no_batch || '')}&no_faktur=${encodeURIComponent(item.no_faktur || '')}`}
                         className="p-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
                       >
                         <Edit className="w-4 h-4" />

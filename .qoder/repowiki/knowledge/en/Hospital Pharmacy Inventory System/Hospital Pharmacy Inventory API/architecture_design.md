@@ -1,4 +1,0 @@
-- Centralized routing in `routes/routes.go` maps all HTTP endpoints to controllers across inventory, stock, and dashboard domains.
-- Shared database connection (`config.SIK`) provides a single GORM-managed MySQL client used by all modules for consistent data access.
-- Common SQL constants and helper functions (e.g., `gudangAPStockJoin`, `validExpireDateWhere`) in `controllers/stockQuery.go` and `controllers/expireFilters.go` enforce consistent filtering and aggregation logic across stock monitoring and item queries.
-- Application startup in `main.go` initializes the database, applies auto-migrations for local tables (`barcode_obat`, `item_activity_log`), and ensures performance indexes on legacy HIS tables before booting the HTTP server.

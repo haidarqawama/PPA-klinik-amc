@@ -25,6 +25,10 @@ type LocalItem struct {
 	Expired *time.Time `json:"expired"`
 	Barcode string     `json:"barcode"`
 
+	// Original batch/faktur identifiers from URL (for targeted barcode update)
+	OriginalNoBatch  string `json:"original_no_batch"`
+	OriginalNoFaktur string `json:"original_no_faktur"`
+
 	CreatedAt string `json:"created_at"`
 }
 

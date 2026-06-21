@@ -1,4 +1,0 @@
-- Controllers use raw SQL strings embedded within GORM `Raw()` or `Table().Select()` calls for complex joins and aggregations rather than pure GORM model associations.
-- Input validation is performed manually in controllers by checking required fields (e.g., `payload.KodeBrng == ""`) before initiating database transactions.
-- Database mutations (stock in/out) are wrapped in explicit transactions (`config.SIK.Begin()`, `Commit()`, `Rollback()`) to ensure consistency between stock tables and history logs.
-- API responses consistently use a `gin.H` map with a `data` key for payloads and an `error` key for failure messages, often including `detail` for technical debugging.

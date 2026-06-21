@@ -5,48 +5,7 @@ import Link from "next/link";
 import { AlertCircle, Hash, MapPin, Package, Search, TrendingDown } from "lucide-react";
 import { formatDate } from '@/utils/dateFormat';
 import { apiUrl } from "@/lib/api";
-
-type StockOutItem = {
-  kode_brng: string;
-  nama_brng: string;
-  barcode: string;
-  stok: number;
-  sell_price: number;
-  harga_apotek: number;
-  harga_umum: number;
-  harga_utama: number;
-  satuan: string;
-  supplier: string;
-  golongan: string;
-  jenis: string;
-  expire: string;
-};
-
-type StockOutBatchOption = {
-  no_batch: string;
-  no_faktur: string;
-  expired: string;
-  sisa: number;
-  h_beli: number;
-  sell_price: number;
-  harga_apotek: number;
-  harga_umum: number;
-  harga_utama: number;
-  tgl_beli: string;
-};
-
-type RecentStockOut = {
-  kode_brng: string;
-  nama_brng: string;
-  qty: number;
-  unit: string;
-  sell_price: number;
-  total_revenue: number;
-  date: string;
-  time: string;
-  destination: string;
-  note: string;
-};
+import type { StockOutItem, StockOutBatchOption, RecentStockOut } from "@/types/stockOut";
 
 const destinations = [
   { value: "Apotek", label: "Apotek", priceKey: "harga_apotek" },
@@ -103,7 +62,9 @@ export default function StockOut() {
   const [loading, setLoading] = useState(false);
 
   const selectedQty = parseNumber(qty);
-  const realtimeStock = Number(selectedItem?.stok || 0);
+  const realtimeStock = selectedBatch
+    ? Number(selectedBatch.sisa || 0)
+    : Number(selectedItem?.stok || 0);
   const stockError = Boolean(selectedItem && selectedQty > realtimeStock);
   const selectedUnitPrice = getPriceByDestination(selectedItem, destination);
 
@@ -223,8 +184,13 @@ export default function StockOut() {
   };
 
   const handleSubmit = async () => {
-    if (!selectedItem || !selectedBatch || selectedQty <= 0 || !destination) {
-      showTemporaryMessage("Pilih barang, batch, isi jumlah, dan pilih tujuan penggunaan");
+    if (!selectedItem || selectedQty <= 0 || !destination) {
+      showTemporaryMessage("Pilih barang, isi jumlah, dan pilih tujuan penggunaan");
+      return;
+    }
+
+    if (selectedItem.has_batch && !selectedBatch) {
+      showTemporaryMessage("Pilih batch terlebih dahulu");
       return;
     }
 
@@ -241,8 +207,8 @@ export default function StockOut() {
         body: JSON.stringify({
           kode_brng: selectedItem.kode_brng,
           qty: selectedQty,
-          no_batch: selectedBatch.no_batch,
-          no_faktur: selectedBatch.no_faktur,
+          no_batch: selectedBatch?.no_batch || null,
+          no_faktur: selectedBatch?.no_faktur || null,
           destination,
           note,
         }),
@@ -347,26 +313,28 @@ export default function StockOut() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm mb-2">Pilih Batch *</label>
-                <select
-                  value={selectedBatch ? getBatchValue(selectedBatch) : ""}
-                  onChange={(event) => {
-                    const batch = batches.find((item) => getBatchValue(item) === event.target.value) || null;
-                    setSelectedBatch(batch);
-                  }}
-                  className="w-full px-4 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="">Pilih batch</option>
-                  {batches.map((batch) => (
-                    <option key={getBatchValue(batch)} value={getBatchValue(batch)}>
-                      {batch.no_batch} - {batch.no_faktur || "tanpa faktur"}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {selectedItem.has_batch && (
+                <div>
+                  <label className="block text-sm mb-2">Pilih Batch *</label>
+                  <select
+                    value={selectedBatch ? getBatchValue(selectedBatch) : ""}
+                    onChange={(event) => {
+                      const batch = batches.find((item) => getBatchValue(item) === event.target.value) || null;
+                      setSelectedBatch(batch);
+                    }}
+                    className="w-full px-4 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="">Pilih batch</option>
+                    {batches.map((batch) => (
+                      <option key={getBatchValue(batch)} value={getBatchValue(batch)}>
+                        {batch.no_batch} - {batch.no_faktur || "tanpa faktur"}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
-              {selectedBatch && (
+              {selectedBatch && selectedItem.has_batch && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="p-3 rounded-xl bg-background border border-border">
                     <p className="text-xs text-muted-foreground">No. Batch</p>
@@ -382,7 +350,7 @@ export default function StockOut() {
                   </div>
                   <div className="p-3 rounded-xl bg-background border border-border">
                     <p className="text-xs text-muted-foreground">Stok Realtime</p>
-                    <p className="text-sm font-medium text-foreground">{Number(selectedItem.stok).toLocaleString("id-ID")} {selectedItem.satuan || "unit"}</p>
+                    <p className="text-sm font-medium text-foreground">{Number(selectedBatch.sisa || 0).toLocaleString("id-ID")} {selectedItem.satuan || "unit"}</p>
                   </div>
                   <div className="p-3 rounded-xl bg-background border border-border">
                     <p className="text-xs text-muted-foreground">Harga Apotek</p>
@@ -420,13 +388,13 @@ export default function StockOut() {
                   <div>
                     <p className="text-sm font-medium text-destructive">Stok Tidak Mencukupi</p>
                     <p className="text-xs text-destructive/80 mt-0.5">
-                      Jumlah yang diminta melebihi stok realtime ({Number(realtimeStock).toLocaleString("id-ID")} {selectedItem.satuan || "unit"})
+                      Jumlah yang diminta melebihi stok batch tersedia ({Number(realtimeStock).toLocaleString("id-ID")} {selectedItem.satuan || "unit"})
                     </p>
                   </div>
                 </div>
               )}
 
-              {selectedQty > 0 && !stockError && selectedBatch && (
+              {selectedQty > 0 && !stockError && (!selectedItem.has_batch || selectedBatch) && (
                 <div className="p-4 rounded-xl bg-primary/10 border border-primary/20">
                   <div className="space-y-2">
                     <div className="flex justify-between items-center gap-4">
@@ -473,7 +441,7 @@ export default function StockOut() {
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={loading || !selectedBatch || stockError || selectedQty <= 0 || !destination}
+                disabled={loading || (selectedItem.has_batch && !selectedBatch) || stockError || selectedQty <= 0 || !destination}
                 className="w-full py-3 px-6 rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? "Memproses..." : "Proses Barang Keluar"}

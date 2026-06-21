@@ -1,1 +1,0 @@
-Next.js App Router ('use client') with Tailwind CSS for styling.

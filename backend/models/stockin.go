@@ -52,5 +52,6 @@ type StockInPayload struct {
 	Expired          string  `json:"expired"`
 	NoBatch          string  `json:"no_batch"`
 	NoFaktur         string  `json:"no_faktur"`
+	Barcode          string  `json:"barcode"`
 	Note             string  `json:"note"`
 }

@@ -1,3 +1,0 @@
-- Raw SQL queries are preferred over GORM ORM methods for complex dashboard aggregations to maintain precise control over execution plans and performance.
-- Pagination metadata (total, total_pages) is calculated manually in the controller layer rather than relying on database-level count queries for every request.
-- SQL constants for reusable filtering logic (e.g., valid expiration dates, stock joins) are defined in separate files within the controllers package to avoid duplication.

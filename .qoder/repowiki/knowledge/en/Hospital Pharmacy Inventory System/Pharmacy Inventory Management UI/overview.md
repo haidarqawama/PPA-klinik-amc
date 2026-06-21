@@ -1,1 +1,0 @@
-Orchestrates a Next.js-based single-page application for pharmacy inventory, stock operations, and master data management.

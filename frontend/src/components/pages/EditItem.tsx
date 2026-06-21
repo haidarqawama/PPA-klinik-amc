@@ -2,36 +2,10 @@
 
 import axios from "axios";
 import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Package, Barcode, Calendar, Hash, ArrowLeft } from "lucide-react";
 import { apiUrl } from "@/lib/api";
-
-type MasterSatuan = {
-  kode_sat: string;
-  satuan: string;
-};
-
-type MasterJenis = {
-  kdjns: string;
-  nama: string;
-};
-
-type MasterGolongan = {
-  kode: string;
-  nama: string;
-};
-
-type MasterSupplier = {
-  kode_industri: string;
-  nama_industri: string;
-};
-
-type Masters = {
-  satuan: MasterSatuan[];
-  jenis: MasterJenis[];
-  golongan: MasterGolongan[];
-  suppliers: MasterSupplier[];
-};
+import type { Masters } from "@/types/master";
 
 const formatNumber = (value: string) => {
   const number = value.replace(/[^\d]/g, "");
@@ -55,7 +29,10 @@ const formatStock = (value: string) => {
 export default function EditItem() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const kodeBrng = params.kodeBrng as string;
+  const urlNoBatch = searchParams.get("no_batch") || "";
+  const urlNoFaktur = searchParams.get("no_faktur") || "";
 
   const [hargaBeli, setHargaBeli] = useState("");
   const [hargaApotek, setHargaApotek] = useState("");
@@ -71,6 +48,8 @@ export default function EditItem() {
   const [satuan, setSatuan] = useState("");
   const [stok, setStok] = useState("");
   const [expired, setExpired] = useState("");
+  const [noBatch, setNoBatch] = useState("");
+  const [noFaktur, setNoFaktur] = useState("");
   const [message, setMessage] = useState("");
   const [masters, setMasters] = useState<Masters>({
     satuan: [],
@@ -114,8 +93,9 @@ export default function EditItem() {
       if (!kodeBrng) return;
 
       try {
+        const qs = new URLSearchParams({ no_batch: urlNoBatch, no_faktur: urlNoFaktur });
         const response = await axios.get(
-          apiUrl(`/api/items/${kodeBrng}`)
+          apiUrl(`/api/items/${kodeBrng}?${qs.toString()}`)
         );
         const item = response.data.data;
 
@@ -132,6 +112,13 @@ export default function EditItem() {
         setHargaApotek(formatNumber(String(item.beliluar || 0)));
         setHargaUmum(formatNumber(String(item.ralan || 0)));
         setHargaUtama(formatNumber(String(item.utama || 0)));
+
+        if (item.no_batch) {
+          setNoBatch(item.no_batch);
+        }
+        if (item.no_faktur) {
+          setNoFaktur(item.no_faktur);
+        }
 
         if (item.expire && item.expire !== "0000-00-00") {
           setExpired(item.expire.substring(0, 10));
@@ -169,6 +156,10 @@ export default function EditItem() {
             harga_utama: Number(String(hargaUtama).replace(/\./g, "")),
             harga_beli_luar: Number(String(hargaApotek).replace(/\./g, "")),
             expired: expired ? `${expired}T00:00:00Z`: null,
+            no_batch: noBatch || null,
+            no_faktur: noFaktur || null,
+            original_no_batch: urlNoBatch || null,
+            original_no_faktur: urlNoFaktur || null,
           }
         );
       
@@ -371,6 +362,30 @@ export default function EditItem() {
                 </option>
             ))}
             </select>
+          </div>
+
+          {/* Batch & Faktur */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm mb-2">No. Batch</label>
+              <input
+                type="text"
+                value={noBatch}
+                onChange={(e) => setNoBatch(e.target.value)}
+                placeholder="No. batch"
+                className="w-full px-4 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div>
+              <label className="block text-sm mb-2">No. Faktur</label>
+              <input
+                type="text"
+                value={noFaktur}
+                onChange={(e) => setNoFaktur(e.target.value)}
+                placeholder="No. faktur"
+                className="w-full px-4 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
           </div>
 
           {/* Supplier */}

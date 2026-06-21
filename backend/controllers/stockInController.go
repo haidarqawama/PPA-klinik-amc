@@ -28,7 +28,18 @@ func SearchStockInItems(c *gin.Context) {
 			DATE_FORMAT(databarang.expire, '%Y-%m-%d') AS expire
 		`).
 		Joins("LEFT JOIN (SELECT kode_brng, SUM(COALESCE(stok, 0)) AS stok FROM gudangbarang WHERE kd_bangsal = 'AP' GROUP BY kode_brng) gudang_stock ON databarang.kode_brng = gudang_stock.kode_brng").
-		Joins("LEFT JOIN barcode_obat ON databarang.kode_brng = barcode_obat.kode_brng").
+		Joins(`LEFT JOIN (
+			SELECT kode_brng, barcode
+			FROM barcode_obat
+			WHERE no_batch = '' AND no_faktur = ''
+			UNION
+			SELECT kode_brng, barcode FROM (
+				SELECT kode_brng, barcode, no_batch, no_faktur,
+					ROW_NUMBER() OVER (PARTITION BY kode_brng ORDER BY no_batch DESC) AS rn
+				FROM barcode_obat
+				WHERE no_batch != '' OR no_faktur != ''
+			) ranked WHERE rn = 1
+		) barcode_obat ON databarang.kode_brng = barcode_obat.kode_brng`).
 		Joins("LEFT JOIN kodesatuan ON databarang.kode_sat = kodesatuan.kode_sat").
 		Joins("LEFT JOIN industrifarmasi ON databarang.kode_industri = industrifarmasi.kode_industri").
 		Joins("LEFT JOIN golongan_barang ON databarang.kode_golongan = golongan_barang.kode")
@@ -114,7 +125,7 @@ func GetStockInHistory(c *gin.Context) {
 			COALESCE(r.keterangan, '') AS note
 		`).
 		Joins("LEFT JOIN databarang ON r.kode_brng = databarang.kode_brng").
-		Joins("LEFT JOIN barcode_obat ON r.kode_brng = barcode_obat.kode_brng").
+		Joins(`LEFT JOIN barcode_obat ON r.kode_brng = barcode_obat.kode_brng AND COALESCE(r.no_batch, '') = barcode_obat.no_batch AND COALESCE(r.no_faktur, '') = barcode_obat.no_faktur`).
 		Joins("LEFT JOIN kodesatuan ON databarang.kode_sat = kodesatuan.kode_sat").
 		Joins("LEFT JOIN industrifarmasi ON databarang.kode_industri = industrifarmasi.kode_industri").
 		Where("r.kd_bangsal = 'AP'").
@@ -137,9 +148,34 @@ func GetStockInHistory(c *gin.Context) {
 	}
 
 	var total int64
-	if err := query.Count(&total).Error; err != nil {
-		c.JSON(500, gin.H{"error": "Gagal menghitung riwayat barang masuk", "detail": err.Error()})
-		return
+	if search == "" {
+		// Fast count: no JOINs needed when no search
+		countQ := config.SIK.Table("riwayat_barang_medis").
+			Where("kd_bangsal = ? AND COALESCE(masuk, 0) > 0", "AP")
+		if date != "" {
+			countQ = countQ.Where("tanggal = ?", date)
+		}
+		countQ.Count(&total)
+	} else {
+		// Count with search: only join tables needed for WHERE filter
+		likeSearch := "%" + search + "%"
+		countQ := config.SIK.Table("riwayat_barang_medis r").
+			Joins("LEFT JOIN databarang ON r.kode_brng = databarang.kode_brng").
+			Joins(`LEFT JOIN barcode_obat ON r.kode_brng = barcode_obat.kode_brng AND COALESCE(r.no_batch, '') = barcode_obat.no_batch AND COALESCE(r.no_faktur, '') = barcode_obat.no_faktur`).
+			Joins("LEFT JOIN industrifarmasi ON databarang.kode_industri = industrifarmasi.kode_industri").
+			Where("r.kd_bangsal = ? AND COALESCE(r.masuk, 0) > 0", "AP")
+		if date != "" {
+			countQ = countQ.Where("r.tanggal = ?", date)
+		}
+		countQ = countQ.Where(`
+			r.kode_brng LIKE ?
+			OR databarang.nama_brng LIKE ?
+			OR barcode_obat.barcode LIKE ?
+			OR r.petugas LIKE ?
+			OR industrifarmasi.nama_industri LIKE ?
+			OR r.keterangan LIKE ?
+		`, likeSearch, likeSearch, likeSearch, likeSearch, likeSearch, likeSearch)
+		countQ.Count(&total)
 	}
 
 	var summary models.StockInSummary
@@ -214,7 +250,7 @@ func stockInHistorySummaryQuery(search string, date string) *gorm.DB {
 
 	likeSearch := "%" + search + "%"
 	query = query.
-		Joins("LEFT JOIN barcode_obat ON r.kode_brng = barcode_obat.kode_brng").
+		Joins(`LEFT JOIN barcode_obat ON r.kode_brng = barcode_obat.kode_brng AND COALESCE(r.no_batch, '') = barcode_obat.no_batch AND COALESCE(r.no_faktur, '') = barcode_obat.no_faktur`).
 		Joins("LEFT JOIN industrifarmasi ON databarang.kode_industri = industrifarmasi.kode_industri").
 		Where(`
 			r.kode_brng LIKE ?
@@ -239,8 +275,8 @@ func AddStockIn(c *gin.Context) {
 		return
 	}
 
-	if payload.KodeBrng == "" || payload.Qty <= 0 || payload.NoBatch == "" || payload.NoFaktur == "" || payload.TanggalPembelian == "" {
-		c.JSON(400, gin.H{"error": "barang, jumlah masuk, no. batch, no. faktur, dan tanggal pembelian wajib diisi"})
+	if payload.KodeBrng == "" || payload.Qty <= 0 {
+		c.JSON(400, gin.H{"error": "barang dan jumlah masuk wajib diisi"})
 		return
 	}
 
@@ -290,61 +326,6 @@ func AddStockIn(c *gin.Context) {
 		return
 	}
 
-	var batchCount int64
-	tx.Table("data_batch").Where("kode_brng = ? AND no_batch = ? AND no_faktur = ?", payload.KodeBrng, payload.NoBatch, payload.NoFaktur).Count(&batchCount)
-
-	var existingBatch struct {
-		JumlahBeli float64 `gorm:"column:jumlahbeli"`
-	}
-	if batchCount > 0 {
-		tx.Table("data_batch").
-			Select("COALESCE(jumlahbeli, 0) AS jumlahbeli").
-			Where("kode_brng = ? AND no_batch = ? AND no_faktur = ?", payload.KodeBrng, payload.NoBatch, payload.NoFaktur).
-			Scan(&existingBatch)
-	}
-
-	jumlahBeli := payload.Qty
-	if batchCount > 0 {
-		jumlahBeli = existingBatch.JumlahBeli + payload.Qty
-	}
-
-	batchData := map[string]interface{}{
-		"kode_brng":      payload.KodeBrng,
-		"tgl_beli":       payload.TanggalPembelian,
-		"tgl_kadaluarsa": payload.Expired,
-		"asal":           "Penerimaan",
-		"no_faktur":      payload.NoFaktur,
-		"jumlahbeli":     jumlahBeli,
-		"sisa":           stokAkhir,
-		"dasar":          prices.Dasar,
-		"h_beli":         prices.HBeli,
-		"ralan":          prices.Ralan,
-		"kelas1":         prices.Kelas1,
-		"kelas2":         prices.Kelas2,
-		"kelas3":         prices.Kelas3,
-		"utama":          prices.Utama,
-		"vip":            prices.Vip,
-		"vvip":           prices.Vvip,
-		"beliluar":       prices.Beliluar,
-		"jualbebas":      prices.Jualbebas,
-		"karyawan":       prices.Karyawan,
-	}
-
-	if batchCount > 0 {
-		if err := tx.Table("data_batch").Where("kode_brng = ? AND no_batch = ? AND no_faktur = ?", payload.KodeBrng, payload.NoBatch, payload.NoFaktur).Updates(batchData).Error; err != nil {
-			tx.Rollback()
-			c.JSON(500, gin.H{"error": "Gagal memperbarui data batch", "detail": err.Error()})
-			return
-		}
-	} else {
-		batchData["no_batch"] = payload.NoBatch
-		if err := tx.Table("data_batch").Create(batchData).Error; err != nil {
-			tx.Rollback()
-			c.JSON(500, gin.H{"error": "Gagal menyimpan data batch", "detail": err.Error()})
-			return
-		}
-	}
-
 	if err := tx.Table("riwayat_barang_medis").Create(map[string]interface{}{
 		"kode_brng":  payload.KodeBrng,
 		"stok_awal":  stokAwal,
@@ -364,6 +345,88 @@ func AddStockIn(c *gin.Context) {
 		tx.Rollback()
 		c.JSON(500, gin.H{"error": "Stok tersimpan, tapi gagal mencatat riwayat", "detail": err.Error()})
 		return
+	}
+
+	// Insert into data_batch and barcode_obat only if batch info is provided
+	hasBatch := payload.NoBatch != "" || payload.NoFaktur != ""
+
+	if hasBatch {
+		var batchCount int64
+		tx.Table("data_batch").Where("kode_brng = ? AND no_batch = ? AND no_faktur = ?", payload.KodeBrng, payload.NoBatch, payload.NoFaktur).Count(&batchCount)
+
+		var existingBatch struct {
+			JumlahBeli float64 `gorm:"column:jumlahbeli"`
+		}
+		if batchCount > 0 {
+			tx.Table("data_batch").
+				Select("COALESCE(jumlahbeli, 0) AS jumlahbeli").
+				Where("kode_brng = ? AND no_batch = ? AND no_faktur = ?", payload.KodeBrng, payload.NoBatch, payload.NoFaktur).
+				Scan(&existingBatch)
+		}
+
+		jumlahBeli := payload.Qty
+		if batchCount > 0 {
+			jumlahBeli = existingBatch.JumlahBeli + payload.Qty
+		}
+
+		batchData := map[string]interface{}{
+			"kode_brng":      payload.KodeBrng,
+			"tgl_beli":       payload.TanggalPembelian,
+			"tgl_kadaluarsa": payload.Expired,
+			"asal":           "Penerimaan",
+			"no_faktur":      payload.NoFaktur,
+			"jumlahbeli":     jumlahBeli,
+			"sisa":           stokAkhir,
+			"dasar":          prices.Dasar,
+			"h_beli":         prices.HBeli,
+			"ralan":          prices.Ralan,
+			"kelas1":         prices.Kelas1,
+			"kelas2":         prices.Kelas2,
+			"kelas3":         prices.Kelas3,
+			"utama":          prices.Utama,
+			"vip":            prices.Vip,
+			"vvip":           prices.Vvip,
+			"beliluar":       prices.Beliluar,
+			"jualbebas":      prices.Jualbebas,
+			"karyawan":       prices.Karyawan,
+		}
+
+		if batchCount > 0 {
+			if err := tx.Table("data_batch").Where("kode_brng = ? AND no_batch = ? AND no_faktur = ?", payload.KodeBrng, payload.NoBatch, payload.NoFaktur).Updates(batchData).Error; err != nil {
+				tx.Rollback()
+				c.JSON(500, gin.H{"error": "Gagal memperbarui data batch", "detail": err.Error()})
+				return
+			}
+		} else {
+			batchData["no_batch"] = payload.NoBatch
+			if err := tx.Table("data_batch").Create(batchData).Error; err != nil {
+				tx.Rollback()
+				c.JSON(500, gin.H{"error": "Gagal menyimpan data batch", "detail": err.Error()})
+				return
+			}
+		}
+	}
+
+	// Insert barcode if provided
+	if payload.Barcode != "" {
+		var existingBarcode models.BarcodeItem
+		result := tx.Where("kode_brng = ? AND no_batch = ? AND no_faktur = ?",
+			payload.KodeBrng, payload.NoBatch, payload.NoFaktur).First(&existingBarcode)
+
+		barcodeItem := models.BarcodeItem{
+			KodeBrng: payload.KodeBrng,
+			NoBatch:  payload.NoBatch,
+			NoFaktur: payload.NoFaktur,
+			Barcode:  payload.Barcode,
+		}
+
+		if result.Error == nil {
+			// Barcode exists for this batch, update it
+			tx.Model(&existingBarcode).Update("barcode", payload.Barcode)
+		} else {
+			// No barcode for this batch, insert new
+			tx.Create(&barcodeItem)
+		}
 	}
 
 	if err := tx.Commit().Error; err != nil {

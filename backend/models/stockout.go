@@ -5,6 +5,7 @@ type StockOutItem struct {
 	NamaBrng    string  `json:"nama_brng" gorm:"column:nama_brng"`
 	Barcode     string  `json:"barcode" gorm:"column:barcode"`
 	Stok        float64 `json:"stok" gorm:"column:stok"`
+	HasBatch    bool    `json:"has_batch" gorm:"column:has_batch"`
 	SellPrice   float64 `json:"sell_price" gorm:"column:sell_price"`
 	HargaApotek float64 `json:"harga_apotek" gorm:"column:harga_apotek"`
 	HargaUmum   float64 `json:"harga_umum" gorm:"column:harga_umum"`

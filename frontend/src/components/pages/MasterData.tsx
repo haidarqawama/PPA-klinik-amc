@@ -3,28 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Edit, Layers3, Plus, Ruler, Search, Tags, Trash2, X } from "lucide-react";
 import { apiUrl } from "@/lib/api";
-
-type MasterType = "golongan" | "jenis" | "satuan";
-
-type MasterRecord = {
-  code: string;
-  name: string;
-};
-
-type MasterConfig = {
-  type: MasterType;
-  title: string;
-  description: string;
-  codeLabel: string;
-  nameLabel: string;
-  icon: React.ElementType;
-};
-
-type MasterApiResponse = {
-  golongan?: { kode: string; nama: string }[];
-  jenis?: { kdjns: string; nama: string }[];
-  satuan?: { kode_sat: string; satuan: string }[];
-};
+import type { MasterType, MasterRecord, MasterConfig, MasterApiResponse } from "@/types/master";
 
 const configs: MasterConfig[] = [
   {

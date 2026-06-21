@@ -1,1 +1,0 @@
-Manages inventory stock-in and stock-out transactions with batch tracking, pricing tiers, and historical reporting.

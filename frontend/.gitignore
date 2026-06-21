@@ -45,3 +45,5 @@ next-env.d.ts
 temp_*.txt
 billing_table.txt
 test_*.go
+.qoder/
+.agents/

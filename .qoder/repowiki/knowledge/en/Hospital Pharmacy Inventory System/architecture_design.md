@@ -1,3 +1,0 @@
-- The backend exposes RESTful endpoints on port 8080, serving as the single source of truth for inventory data and business logic.
-- The frontend consumes these APIs via a centralized `api.ts` client that dynamically resolves the backend host, enabling seamless local development and deployment flexibility.
-- Cross-origin resource sharing (CORS) is explicitly enabled in the backend entry point to permit browser-based requests from the frontend application.

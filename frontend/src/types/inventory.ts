@@ -4,16 +4,6 @@ export type FilterOption = {
   color?: string;
 };
 
-export type MasterGolongan = {
-  kode: string;
-  nama: string;
-};
-
-export type MasterJenis = {
-  kdjns: string;
-  nama: string;
-};
-
 export type InventoryItem = {
   kode_brng: string;
   nama_brng: string;

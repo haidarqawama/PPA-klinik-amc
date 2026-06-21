@@ -3,16 +3,7 @@
 import { useEffect, useState } from "react";
 import { Package, Barcode, Calendar, Hash } from "lucide-react";
 import { apiUrl } from "@/lib/api";
-
-type MasterOption = {
-  kode?: string;
-  nama?: string;
-  kdjns?: string;
-  kode_sat?: string;
-  satuan?: string;
-  kode_industri?: string;
-  nama_industri?: string;
-};
+import type { MasterOption } from "@/types/master";
 
 export default function AddItem() {
   const [isObat, setIsObat] = useState(true);
@@ -125,9 +116,6 @@ export default function AddItem() {
       !formData.golongan ||
       !formData.jenis ||
       !formData.expired ||
-      !noBatch ||
-      !noFaktur ||
-      !tanggalPembelian ||
       !hargaBeli ||
       !hargaUmum ||
       !hargaUtama ||
@@ -169,9 +157,9 @@ export default function AddItem() {
           harga_utama: Number(String(hargaUtama).replace(/\./g,"")),
 
           harga_beli_luar: Number(String(hargaApotek).replace(/\./g,"")),
-          no_batch: noBatch,
-          no_faktur: noFaktur,
-          tanggal_pembelian: tanggalPembelian,
+          no_batch: noBatch || null,
+          no_faktur: noFaktur || null,
+          tanggal_pembelian: tanggalPembelian || null,
         
           expired: formData.expired
             ? `${formData.expired}T00:00:00Z`
@@ -351,7 +339,7 @@ export default function AddItem() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm mb-2">No. Batch *</label>
+              <label className="block text-sm mb-2">No. Batch</label>
               <input
                 type="text"
                 placeholder="Masukkan nomor batch"
@@ -361,7 +349,7 @@ export default function AddItem() {
               />
             </div>
             <div>
-              <label className="block text-sm mb-2">No. Faktur *</label>
+              <label className="block text-sm mb-2">No. Faktur</label>
               <input
                 type="text"
                 placeholder="Masukkan nomor faktur"
@@ -373,7 +361,7 @@ export default function AddItem() {
           </div>
 
           <div>
-            <label className="block text-sm mb-2">Tanggal Pembelian *</label>
+            <label className="block text-sm mb-2">Tanggal Pembelian</label>
             <div className="relative">
               <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
               <input
@@ -687,9 +675,6 @@ export default function AddItem() {
                 !formData.golongan ||
                 !formData.jenis ||
                 !formData.expired ||
-                !noBatch ||
-                !noFaktur ||
-                !tanggalPembelian ||
                 !hargaBeli ||
                 !hargaUmum ||
                 !hargaUtama ||

@@ -21,10 +21,12 @@ const latestBatchJoin = `
 
 func GetItemByKode(c *gin.Context) {
 	kode := c.Param("kodeBrng")
+	noBatch := c.Query("no_batch")
+	noFaktur := c.Query("no_faktur")
 
 	var item models.Item
 
-	err := config.SIK.
+	query := config.SIK.
 		Table("databarang").
 		Select(`
 			databarang.kode_brng,
@@ -73,19 +75,27 @@ func GetItemByKode(c *gin.Context) {
 			LEFT JOIN golongan_barang
 			ON databarang.kode_golongan = golongan_barang.kode
 		`).
-		Joins(`
-			LEFT JOIN (
-				SELECT
-					kode_brng,
-					MIN(barcode) AS barcode
-				FROM barcode_obat
-				GROUP BY kode_brng
-			) barcode_barang
+		Joins(latestBatchJoin)
+
+	// If no_batch/no_faktur specified, fetch the exact barcode for that batch
+	if noBatch != "" || noFaktur != "" {
+		query = query.Joins(`
+			LEFT JOIN barcode_obat barcode_barang
 			ON databarang.kode_brng = barcode_barang.kode_brng
-		`).
-		Joins(latestBatchJoin).
-		Where("databarang.kode_brng = ?", kode).
-		First(&item).Error
+			AND barcode_barang.no_batch = ?
+			AND barcode_barang.no_faktur = ?
+		`, noBatch, noFaktur)
+	} else {
+		// No batch context: fetch the non-batch barcode (empty no_batch/no_faktur)
+		query = query.Joins(`
+			LEFT JOIN barcode_obat barcode_barang
+			ON databarang.kode_brng = barcode_barang.kode_brng
+			AND barcode_barang.no_batch = ''
+			AND barcode_barang.no_faktur = ''
+		`)
+	}
+
+	err := query.Where("databarang.kode_brng = ?", kode).First(&item).Error
 
 	if err != nil {
 		c.JSON(404, gin.H{"message": "Barang tidak ditemukan"})
@@ -101,15 +111,7 @@ func GetItems(c *gin.Context) {
 
 	search := c.Query("search")
 
-	config.SIK.Raw(`
-		SELECT COUNT(1)
-		FROM (
-			SELECT kode_brng, no_batch, no_faktur
-			FROM gudangbarang
-			WHERE kd_bangsal = 'AP'
-			GROUP BY kode_brng, no_batch, no_faktur
-		) inventory_batch
-	`).Scan(&total)
+	config.SIK.Raw(`SELECT COUNT(1) FROM databarang`).Scan(&total)
 
 	query := config.SIK.
 		Table("databarang").
@@ -119,7 +121,7 @@ func GetItems(c *gin.Context) {
 			databarang.stokminimal,
 
 			COALESCE(
-				DATE_FORMAT(batch_dates.tgl_kadaluarsa,'%Y-%m-%d'),
+				DATE_FORMAT(COALESCE(batch_dates.tgl_kadaluarsa, databarang.expire),'%Y-%m-%d'),
 				DATE_FORMAT(databarang.expire,'%Y-%m-%d')
 			) AS expire,
 
@@ -148,7 +150,7 @@ func GetItems(c *gin.Context) {
 			DATE_FORMAT(batch_dates.tgl_kadaluarsa,'%Y-%m-%d') AS tgl_kadaluarsa
 		`).
 		Joins(`
-			INNER JOIN (
+			LEFT JOIN (
 				SELECT
 					kode_brng,
 					COALESCE(no_batch, '') AS no_batch,
@@ -169,6 +171,7 @@ func GetItems(c *gin.Context) {
 			ON gudang_inventory.kode_brng = batch_dates.kode_brng
 			AND gudang_inventory.no_batch = COALESCE(batch_dates.no_batch, '')
 			AND gudang_inventory.no_faktur = COALESCE(batch_dates.no_faktur, '')
+			AND (gudang_inventory.no_batch != '' OR gudang_inventory.no_faktur != '')
 		`).
 		Joins(`
 			LEFT JOIN industrifarmasi
@@ -191,13 +194,13 @@ func GetItems(c *gin.Context) {
 			ON databarang.kode_golongan = golongan_barang.kode
 		`).
 		Joins(`
-			LEFT JOIN (
-				SELECT kode_brng, MIN(barcode) AS barcode
-				FROM barcode_obat
-				GROUP BY kode_brng
-			) barcode_barang
-			ON databarang.kode_brng = barcode_barang.kode_brng
+			LEFT JOIN barcode_obat barcode_barang
+			ON gudang_inventory.kode_brng = barcode_barang.kode_brng
+			AND gudang_inventory.no_batch = barcode_barang.no_batch
+			AND gudang_inventory.no_faktur = barcode_barang.no_faktur
 		`)
+
+	query = query.Where("COALESCE(gudang_inventory.stok, 0) >= 0")
 
 	if search != "" {
 		query = query.Where(`
@@ -253,13 +256,19 @@ func UpdateItem(c *gin.Context) {
 	}
 
 	if item.Barcode != "" {
-		var total int64
-		config.SIK.Table("barcode_obat").Where("kode_brng = ?", kodeBrng).Count(&total)
+		// Use original batch/faktur from URL to target the correct barcode row
+		origBatch := item.OriginalNoBatch
+		origFaktur := item.OriginalNoFaktur
 
-		if total > 0 {
-			config.SIK.Table("barcode_obat").Where("kode_brng = ?", kodeBrng).Update("barcode", item.Barcode)
+		var existing models.BarcodeItem
+		result := config.SIK.Where("kode_brng = ? AND no_batch = ? AND no_faktur = ?", kodeBrng, origBatch, origFaktur).First(&existing)
+
+		if result.Error == nil {
+			// Barcode row exists for this batch, update it
+			config.SIK.Model(&existing).Update("barcode", item.Barcode)
 		} else {
-			config.SIK.Create(&models.BarcodeItem{KodeBrng: kodeBrng, Barcode: item.Barcode})
+			// No barcode row for this batch, create one
+			config.SIK.Create(&models.BarcodeItem{KodeBrng: kodeBrng, NoBatch: origBatch, NoFaktur: origFaktur, Barcode: item.Barcode})
 		}
 	}
 

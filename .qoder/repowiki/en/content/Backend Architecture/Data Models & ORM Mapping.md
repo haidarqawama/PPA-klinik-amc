@@ -9,17 +9,18 @@
 - [stockin.go](file://backend/models/stockin.go)
 - [stockout.go](file://backend/models/stockout.go)
 - [batch.go](file://backend/models/batch.go)
-- [local_item.go](file://backend/models/local_item.go)
-- [sik_item.go](file://backend/models/sik_item.go)
-- [barcodeItem.go](file://backend/models/barcodeItem.go)
-- [item_activity_log.go](file://backend/models/item_activity_log.go)
 - [dashboard.go](file://backend/models/dashboard.go)
 - [monitoringStock.go](file://backend/models/monitoringStock.go)
-- [itemController.go](file://backend/controllers/itemController.go)
-- [stockInController.go](file://backend/controllers/stockInController.go)
-- [stockOutController.go](file://backend/controllers/stockOutController.go)
-- [masterController.go](file://backend/controllers/masterController.go)
+- [master.go](file://backend/models/master.go)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Added documentation for centralized model files that were moved from controllers
+- Updated model structure documentation to reflect new ItemPriceSnapshot and MasterTableConfig types
+- Enhanced dashboard and monitoring stock model documentation with comprehensive DTO structures
+- Expanded stock operation models with detailed payload and response structures
+- Updated architecture diagrams to show centralized model organization
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -27,170 +28,173 @@
 3. [Core Components](#core-components)
 4. [Architecture Overview](#architecture-overview)
 5. [Detailed Component Analysis](#detailed-component-analysis)
-6. [Dependency Analysis](#dependency-analysis)
-7. [Performance Considerations](#performance-considerations)
-8. [Troubleshooting Guide](#troubleshooting-guide)
-9. [Conclusion](#conclusion)
-10. [Appendices](#appendices)
+6. [Centralized Model Organization](#centralized-model-organization)
+7. [Dependency Analysis](#dependency-analysis)
+8. [Performance Considerations](#performance-considerations)
+9. [Troubleshooting Guide](#troubleshooting-guide)
+10. [Conclusion](#conclusion)
+11. [Appendices](#appendices)
 
 ## Introduction
-This document provides comprehensive data model documentation for the PPA system’s GORM ORM implementation. It covers model structures, field definitions, JSON tags, associations, and query patterns used across the backend. It also documents database connection, migrations, indexes, and complex queries involving joins, aggregations, and pagination. The goal is to enable developers to understand and extend the data layer effectively while maintaining consistency and performance.
+This document provides comprehensive data model documentation for the PPA system's GORM ORM implementation. The system has undergone refactoring to centralize shared data structures in dedicated model files, improving type safety and code organization. The documentation covers model structures, field definitions, JSON tags, associations, and query patterns used across the backend. It also documents database connection, migrations, indexes, and complex queries involving joins, aggregations, and pagination.
 
 ## Project Structure
-The data models reside under the backend models package and are used by controllers to build SQL queries against the SIK database. The configuration module initializes the database connection and performs auto-migrations and index creation. Controllers orchestrate CRUD operations and complex analytics queries.
+The data models are now organized in a centralized manner under the backend/models package, with dedicated files for different functional domains. The configuration module initializes the database connection and performs auto-migrations and index creation. Controllers import these centralized models for type-safe operations.
 
 ```mermaid
 graph TB
-subgraph "Models"
-M_Item["models.Item"]
+subgraph "Centralized Models Package"
+M_Item["models.Item<br/>models.ItemPriceSnapshot"]
 M_Supplier["models.Supplier"]
 M_StockIn["models.StockIn* structs"]
 M_StockOut["models.StockOut* structs"]
 M_Batch["models.DataBatch"]
-M_LocalItem["models.LocalItem"]
-M_SIKItem["models.SIKItem"]
-M_Barcode["models.BarcodeItem"]
-M_Activity["models.ItemActivityLog"]
 M_Dashboard["models.Dashboard* structs"]
 M_Monitoring["models.MonitoringStock* structs"]
+M_Master["models.Master* structs"]
 end
 subgraph "Controllers"
-C_Item["controllers.GetItemByKode<br/>controllers.GetItems<br/>controllers.UpdateItem<br/>controllers.DeleteItem"]
-C_StockIn["controllers.SearchStockInItems<br/>controllers.GetStockInHistory<br/>controllers.AddStockIn"]
-C_StockOut["controllers.SearchStockOutItems<br/>controllers.GetStockOutHistory<br/>controllers.AddStockOut"]
-C_Master["controllers.GetMasters<br/>controllers.AddMaster<br/>controllers.UpdateMaster<br/>controllers.DeleteMaster"]
+C_Item["controllers.itemController"]
+C_StockIn["controllers.stockInController"]
+C_StockOut["controllers.stockOutController"]
+C_Master["controllers.masterController"]
 end
 subgraph "Config"
 CFG_DB["config.ConnectDatabase"]
 MAIN["main.main"]
 end
-CFG_DB --> M_Barcode
-CFG_DB --> M_Activity
+CFG_DB --> M_Item
+CFG_DB --> M_Batch
 MAIN --> CFG_DB
 C_Item --> M_Item
-C_Item --> M_Barcode
-C_Item --> M_Activity
 C_StockIn --> M_StockIn
-C_StockIn --> M_Batch
 C_StockOut --> M_StockOut
-C_Master --> M_Supplier
+C_Master --> M_Master
 ```
 
 **Diagram sources**
 - [database.go:13-89](file://backend/config/database.go#L13-L89)
 - [main.go:12-32](file://backend/main.go#L12-L32)
-- [item.go:3-32](file://backend/models/item.go#L3-L32)
-- [supplier.go:3-14](file://backend/models/supplier.go#L3-L14)
+- [item.go:3-49](file://backend/models/item.go#L3-L49)
 - [stockin.go:3-57](file://backend/models/stockin.go#L3-L57)
 - [stockout.go:3-60](file://backend/models/stockout.go#L3-L60)
 - [batch.go:3-29](file://backend/models/batch.go#L3-L29)
-- [local_item.go:5-34](file://backend/models/local_item.go#L5-L34)
-- [sik_item.go:3-32](file://backend/models/sik_item.go#L3-L32)
-- [barcodeItem.go:3-12](file://backend/models/barcodeItem.go#L3-L12)
-- [item_activity_log.go:5-14](file://backend/models/item_activity_log.go#L5-L14)
-- [dashboard.go:3-60](file://backend/models/dashboard.go#L3-L60)
+- [dashboard.go:5-76](file://backend/models/dashboard.go#L5-L76)
 - [monitoringStock.go:3-81](file://backend/models/monitoringStock.go#L3-L81)
-- [itemController.go:22-96](file://backend/controllers/itemController.go#L22-L96)
-- [stockInController.go:13-50](file://backend/controllers/stockInController.go#L13-L50)
-- [stockOutController.go:13-63](file://backend/controllers/stockOutController.go#L13-L63)
-- [masterController.go:51-95](file://backend/controllers/masterController.go#L51-L95)
+- [master.go:3-16](file://backend/models/master.go#L3-L16)
 
 **Section sources**
 - [database.go:13-89](file://backend/config/database.go#L13-L89)
 - [main.go:12-32](file://backend/main.go#L12-L32)
 
 ## Core Components
-This section outlines the primary data models, their fields, JSON tags, and notable ORM attributes. It also highlights how controllers consume these models and construct complex queries.
+This section outlines the primary data models, their fields, JSON tags, and notable ORM attributes. The models are now organized in centralized files for better type safety and code organization.
 
-- Item
-  - Purpose: Represents a pharmaceutical item with pricing tiers, stock metadata, and category/jenis/golongan references.
-  - Key fields: KodeBrng, NamaBrng, StokMinimal, Expire, HBeli, Ralan, Utama, Beliluar, Barcode, KodeKategori, KodeGolongan, KDJns, KodeIndustri, Stok, KodeSat, Supplier, Satuan, Jenis, Kategori, Golongan, NoBatch, NoFaktur, TglBeli, TglKadaluarsa.
-  - JSON tags: snake_case aligned with API responses.
-  - Table override: TableName returns "databarang".
-  - Usage: Controllers compose complex SELECT with LEFT JOINs to enrich item records with stock, supplier, unit, category, and latest batch info.
+### Core Data Models
 
-- Supplier
-  - Purpose: Master supplier entity with address and contact info.
-  - Fields: KodeIndustri, NamaIndustri, Alamat, Kota, NoTelp.
-  - JSON tags: camelCase for API exposure.
+**Item Model**
+- Purpose: Represents a pharmaceutical item with pricing tiers, stock metadata, and category/jenis/golongan references.
+- Key fields: KodeBrng, NamaBrng, StokMinimal, Expire, HBeli, Ralan, Utama, Beliluar, Barcode, KodeKategori, KodeGolongan, KDJns, KodeIndustri, Stok, KodeSat, Supplier, Satuan, Jenis, Kategori, Golongan, NoBatch, NoFaktur, TglBeli, TglKadaluarsa.
+- JSON tags: snake_case aligned with API responses.
+- Table override: TableName returns "databarang".
 
-- StockInItem, StockInRecent, StockInHistory, StockInSummary, StockInPayload
-  - Purpose: Represent purchase entry views and payloads.
-  - Fields: KodeBrng, NamaBrng, Barcode, Stok, HBeli, Satuan, Supplier, Golongan, Expire; recent/history add Qty, Price, Date/Time, Operator, Note; summary aggregates totals; payload carries input for adding stock-in.
+**ItemPriceSnapshot Model**
+- Purpose: Encapsulates comprehensive pricing data for inventory valuation and reporting.
+- Fields: Dasar, HBeli, Ralan, Kelas1-Kelas3, Utama, Vip, Vvip, Beliluar, Jualbebas, Karyawan.
+- JSON tags: snake_case for API compatibility.
 
-- StockOutItem, StockOutHistory, StockOutPayload, StockOutHistorySummary, StockOutBatchOption
-  - Purpose: Represent sales/disbursement views and payloads.
-  - Fields: Similar enrichment to stock-in; batch option includes expiry and pricing snapshots per batch.
+**Supplier Model**
+- Purpose: Master supplier entity with address and contact info.
+- Fields: KodeIndustri, NamaIndustri, Alamat, Kota, NoTelp.
+- JSON tags: camelCase for API exposure.
 
-- DataBatch
-  - Purpose: Batch-level purchase record with pricing tiers and quantities.
-  - Fields: NoBatch, KodeBrng, TglBeli, TglKadaluarsa, Asal, NoFaktur, Dasar, HBeli, Ralan, Kelas1..3, Utama, Vip, Vvip, Beliluar, Jualbebas, Karyawan, JumlahBeli, Sisa.
-  - Table override: TableName returns "data_batch".
+### Stock Operation Models
 
-- LocalItem
-  - Purpose: Local inventory item representation persisted in a local "items" table.
-  - Fields: ID, KodeBarang, NamaBarang, Supplier, Satuan, Kategori, Golongan, Jenis, NoBatch, NoFaktur, TanggalPembelian, HargaBeli, HargaUmum/HargaUtama/HargaBeliLuar, Stok, Expired (time), Barcode, CreatedAt.
-  - Table override: TableName returns "items".
+**StockIn Models**
+- StockInItem: Enriched purchase item view with barcode, unit, supplier, golongan, and formatted expire.
+- StockInRecent: Recent purchase transactions with qty, price, date/time, supplier, and note.
+- StockInHistory: Complete purchase history with aggregated totals and batch information.
+- StockInSummary: Purchase summary metrics with total quantity and value.
+- StockInPayload: Input structure for adding new stock-in entries.
 
-- SIKItem
-  - Purpose: Lightweight projection of SIK item data for read-only scenarios.
-  - Fields: KodeBrng, NamaBrng, Barcode, Expire, HBeli, Ralan, Utama, Beliluar, Stok, Supplier, Satuan, Jenis, Kategori, Golongan.
+**StockOut Models**
+- StockOutItem: Enriched sales item view with pricing tiers for different destinations.
+- StockOutHistory: Complete sales history with revenue calculation and destination tracking.
+- StockOutPayload: Input structure for adding new stock-out entries.
+- StockOutHistorySummary: Sales summary metrics with total quantity and revenue.
+- StockOutBatchOption: Available batch options with pricing snapshots per batch.
 
-- BarcodeItem
-  - Purpose: Barcode lookup keyed by KodeBrng.
-  - Fields: KodeBrng (primary key), Barcode (unique).
-  - Table override: TableName returns "barcode_obat".
+### Supporting Models
 
-- ItemActivityLog
-  - Purpose: Audit log for item activity events.
-  - Fields: ID (primary key), KodeBrng (indexed), CreatedAt (autoCreateTime).
-  - Table override: TableName returns "item_activity_logs".
+**DataBatch Model**
+- Purpose: Batch-level purchase record with comprehensive pricing tiers and quantities.
+- Fields: NoBatch, KodeBrng, TglBeli, TglKadaluarsa, Asal, NoFaktur, Dasar, HBeli, Ralan, Kelas1..3, Utama, Vip, Vvip, Beliluar, Jualbebas, Karyawan, JumlahBeli, Sisa.
+- Table override: TableName returns "data_batch".
 
-- Dashboard* and MonitoringStock*
-  - Purpose: DTOs for dashboard analytics and stock monitoring reports.
-  - Fields: Summary metrics, distribution stats, location totals, movement trends, recent activities, pagination metadata, turnover/coVERAGE calculations, and grouped statistics.
+**Dashboard Models**
+- DashboardCacheKey: Cache key structure for dashboard data optimization.
+- DashboardCacheEntry: Cached dashboard response with timestamp.
+- DashboardSummary: Inventory overview metrics.
+- DashboardDistribution: Category-wise stock distribution.
+- DashboardLocation: Location-based stock holdings.
+- DashboardStockMovement: Monthly stock inflow/outflow trends.
+- DashboardRecentActivity: Recent inventory activities.
+- DashboardPagination: Pagination metadata for dashboard queries.
+- DashboardResponse: Complete dashboard analytics response.
+
+**MonitoringStock Models**
+- MonitoringStockSummary: Critical stock metrics.
+- MonitoringStockLowItem: Low stock item identification.
+- MonitoringStockExpiringItem: Expiring soon item tracking.
+- MonitoringStockTurnover: Inventory turnover analysis.
+- MonitoringStockCoverage: Stock coverage days calculation.
+- MonitoringStockGolonganValue: Category-wise inventory valuation.
+- MonitoringStockGolonganStat: Category stock statistics.
+- MonitoringStockMovementRow: Movement trend data.
+- MonitoringStockResponse: Complete stock monitoring report.
+
+**Master Models**
+- MasterPayload: Request payload for master data operations.
+- MasterTableConfig: Dynamic table configuration for CRUD operations.
 
 **Section sources**
-- [item.go:3-32](file://backend/models/item.go#L3-L32)
+- [item.go:3-49](file://backend/models/item.go#L3-L49)
 - [supplier.go:3-14](file://backend/models/supplier.go#L3-L14)
 - [stockin.go:3-57](file://backend/models/stockin.go#L3-L57)
 - [stockout.go:3-60](file://backend/models/stockout.go#L3-L60)
 - [batch.go:3-29](file://backend/models/batch.go#L3-L29)
-- [local_item.go:5-34](file://backend/models/local_item.go#L5-L34)
-- [sik_item.go:3-32](file://backend/models/sik_item.go#L3-L32)
-- [barcodeItem.go:3-12](file://backend/models/barcodeItem.go#L3-L12)
-- [item_activity_log.go:5-14](file://backend/models/item_activity_log.go#L5-L14)
-- [dashboard.go:3-60](file://backend/models/dashboard.go#L3-L60)
+- [dashboard.go:5-76](file://backend/models/dashboard.go#L5-L76)
 - [monitoringStock.go:3-81](file://backend/models/monitoringStock.go#L3-L81)
+- [master.go:3-16](file://backend/models/master.go#L3-L16)
 
 ## Architecture Overview
-The system connects to a MySQL database via GORM, auto-migrates selected models, and creates indexes on frequently queried columns. Controllers issue SQL queries using GORM’s Table/Joins/Where/Scan/Count patterns to fetch enriched datasets and maintain transactional integrity for stock movements.
+The system maintains a centralized model organization where shared data structures are defined in dedicated files. The configuration module handles database connections and migrations, while controllers import these models for type-safe operations. This refactoring improves code organization and reduces coupling between controllers and data structures.
 
 ```mermaid
 graph TB
 APP["main.main"] --> DB["config.ConnectDatabase"]
 DB --> GMIG["AutoMigrate(models.BarcodeItem, ItemActivityLog)"]
 DB --> IDX["ensureIndex(...)"]
-CTRL_ITEM["controllers.itemController"] --> QRY_ITEM["Complex SELECT with Joins"]
-CTRL_STOCKIN["controllers.stockInController"] --> QRY_STOCKIN["Search/History/Aggregation"]
-CTRL_STOCKOUT["controllers.stockOutController"] --> QRY_STOCKOUT["Search/History/Aggregation"]
+CTRL_ITEM["controllers.itemController"] --> QRY_ITEM["Type-safe queries"]
+CTRL_STOCKIN["controllers.stockInController"] --> QRY_STOCKIN["Stock operations"]
+CTRL_STOCKOUT["controllers.stockOutController"] --> QRY_STOCKOUT["Stock operations"]
 CTRL_MASTER["controllers.masterController"] --> QRY_MASTER["Master CRUD"]
+MODELS["Centralized Models Package"] --> CTRL_ITEM
+MODELS --> CTRL_STOCKIN
+MODELS --> CTRL_STOCKOUT
+MODELS --> CTRL_MASTER
 ```
 
 **Diagram sources**
 - [main.go:12-32](file://backend/main.go#L12-L32)
 - [database.go:13-89](file://backend/config/database.go#L13-L89)
-- [itemController.go:22-96](file://backend/controllers/itemController.go#L22-L96)
-- [stockInController.go:13-50](file://backend/controllers/stockInController.go#L13-L50)
-- [stockOutController.go:13-63](file://backend/controllers/stockOutController.go#L13-L63)
-- [masterController.go:51-95](file://backend/controllers/masterController.go#L51-L95)
 
 ## Detailed Component Analysis
 
 ### Database Connection and Migration Strategy
 - Connection: Opens a MySQL connection to the SIK database and panics on failure.
 - Auto-migration: Migrates models.BarcodeItem during initial setup and again during server startup for ItemActivityLog.
-- Index management: Creates indexes on frequently filtered/sorted columns (e.g., expire, kode_golongan, dashboard recent, stock summaries) using a safe ensureIndex routine that checks information_schema before creating.
+- Index management: Creates indexes on frequently filtered/sorted columns using a safe ensureIndex routine that checks information_schema before creating.
 
 ```mermaid
 sequenceDiagram
@@ -237,10 +241,10 @@ Ctrl-->>Client : {data : Item}
 
 **Diagram sources**
 - [itemController.go:22-96](file://backend/controllers/itemController.go#L22-L96)
-- [item.go:3-32](file://backend/models/item.go#L3-L32)
+- [item.go:3-49](file://backend/models/item.go#L3-L49)
 
 **Section sources**
-- [item.go:3-32](file://backend/models/item.go#L3-L32)
+- [item.go:3-49](file://backend/models/item.go#L3-L49)
 - [itemController.go:22-96](file://backend/controllers/itemController.go#L22-L96)
 
 ### Stock-In Workflow
@@ -272,6 +276,7 @@ Ctrl-->>Client : {message, data}
 - [batch.go:3-29](file://backend/models/batch.go#L3-L29)
 
 **Section sources**
+- [stockin.go:3-57](file://backend/models/stockin.go#L3-L57)
 - [stockInController.go:13-50](file://backend/controllers/stockInController.go#L13-L50)
 - [stockInController.go:177-233](file://backend/controllers/stockInController.go#L177-L233)
 - [stockInController.go:235-382](file://backend/controllers/stockInController.go#L235-L382)
@@ -306,6 +311,7 @@ End(["End"])
 - [stockout.go:3-60](file://backend/models/stockout.go#L3-L60)
 
 **Section sources**
+- [stockout.go:3-60](file://backend/models/stockout.go#L3-L60)
 - [stockOutController.go:13-63](file://backend/controllers/stockOutController.go#L13-L63)
 - [stockOutController.go:283-376](file://backend/controllers/stockOutController.go#L283-L376)
 - [stockOutController.go:189-281](file://backend/controllers/stockOutController.go#L189-L281)
@@ -334,11 +340,10 @@ Ctrl-->>Client : {message}
 
 **Diagram sources**
 - [masterController.go:51-95](file://backend/controllers/masterController.go#L51-L95)
-- [masterController.go:97-139](file://backend/controllers/masterController.go#L97-L139)
 
 **Section sources**
+- [master.go:3-16](file://backend/models/master.go#L3-L16)
 - [masterController.go:51-95](file://backend/controllers/masterController.go#L51-L95)
-- [masterController.go:97-139](file://backend/controllers/masterController.go#L97-L139)
 
 ### Entity Relationships and Associations
 - databarang ↔ gudangbarang: One-to-many by kode_brng; aggregated per no_batch/no_faktur for inventory.
@@ -444,12 +449,10 @@ INDUSTRI_FARMASI ||--o{ DATABARANG : "supplier"
 ```
 
 **Diagram sources**
-- [item.go:3-32](file://backend/models/item.go#L3-L32)
+- [item.go:3-49](file://backend/models/item.go#L3-L49)
+- [batch.go:3-29](file://backend/models/batch.go#L3-L29)
 - [stockin.go:3-57](file://backend/models/stockin.go#L3-L57)
 - [stockout.go:3-60](file://backend/models/stockout.go#L3-L60)
-- [batch.go:3-29](file://backend/models/batch.go#L3-L29)
-- [barcodeItem.go:3-12](file://backend/models/barcodeItem.go#L3-L12)
-- [supplier.go:3-14](file://backend/models/supplier.go#L3-L14)
 
 ### Validation Rules and Constraints
 - Payload validation occurs in controllers:
@@ -463,10 +466,9 @@ INDUSTRI_FARMASI ||--o{ DATABARANG : "supplier"
   - Batch selection ordered by expiry/buy date to support FIFO-like rotation.
 
 **Section sources**
-- [stockInController.go:242-245](file://backend/controllers/stockInController.go#L242-L245)
-- [stockOutController.go:196-199](file://backend/controllers/stockOutController.go#L196-L199)
+- [stockin.go:47-57](file://backend/models/stockin.go#L47-L57)
+- [stockout.go:34-41](file://backend/models/stockout.go#L34-L41)
 - [database.go:50-84](file://backend/config/database.go#L50-L84)
-- [barcodeItem.go:7](file://backend/models/barcodeItem.go#L7)
 
 ### Serialization and API Mapping
 - JSON tags:
@@ -478,8 +480,8 @@ INDUSTRI_FARMASI ||--o{ DATABARANG : "supplier"
   - Aggregated fields (e.g., total cost/value, formatted dates) are computed in SQL and returned as scalars or arrays.
 
 **Section sources**
-- [item.go:4-27](file://backend/models/item.go#L4-L27)
-- [supplier.go:5-13](file://backend/models/supplier.go#L5-L13)
+- [item.go:19-44](file://backend/models/item.go#L19-L44)
+- [supplier.go:3-14](file://backend/models/supplier.go#L3-L14)
 - [stockin.go:3-57](file://backend/models/stockin.go#L3-L57)
 - [stockout.go:3-60](file://backend/models/stockout.go#L3-L60)
 
@@ -523,22 +525,66 @@ F --> G["Apply pagination (LIMIT/OFFSET)"]
 - [stockInController.go:177-233](file://backend/controllers/stockInController.go#L177-L233)
 - [stockOutController.go:315-376](file://backend/controllers/stockOutController.go#L315-L376)
 
+## Centralized Model Organization
+
+### Model File Structure
+The refactoring has resulted in a well-organized model structure where each functional domain has its dedicated file:
+
+**Core Domain Models**
+- `item.go`: Core item representation and pricing snapshot
+- `supplier.go`: Supplier master data
+- `batch.go`: Batch-level purchase records
+
+**Operation Domain Models**
+- `stockin.go`: Stock-in related DTOs and payloads
+- `stockout.go`: Stock-out related DTOs and payloads
+
+**Analytics Domain Models**
+- `dashboard.go`: Comprehensive dashboard analytics structures
+- `monitoringStock.go`: Stock monitoring and reporting models
+
+**Master Data Models**
+- `master.go`: Centralized master data operation structures
+
+### Type Safety Improvements
+The centralized approach provides several benefits:
+- **Compile-time type checking**: Shared structures prevent runtime type errors
+- **Consistent naming**: Standardized field naming across related operations
+- **Reduced coupling**: Controllers depend on stable interface contracts
+- **Improved maintainability**: Changes to shared structures propagate consistently
+
+### Model Relationships
+The centralized models maintain clear relationships:
+- ItemPriceSnapshot complements Item with comprehensive pricing data
+- StockIn/StockOut models share common field structures for consistency
+- Dashboard and MonitoringStock models provide structured analytics responses
+- Master models enable dynamic table operations with type safety
+
+**Section sources**
+- [item.go:3-49](file://backend/models/item.go#L3-L49)
+- [stockin.go:3-57](file://backend/models/stockin.go#L3-L57)
+- [stockout.go:3-60](file://backend/models/stockout.go#L3-L60)
+- [dashboard.go:5-76](file://backend/models/dashboard.go#L5-L76)
+- [monitoringStock.go:3-81](file://backend/models/monitoringStock.go#L3-L81)
+- [master.go:3-16](file://backend/models/master.go#L3-L16)
+
 ## Dependency Analysis
-- Controllers depend on config.SIK for database operations and import models for DTOs and table definitions.
-- Models define table names and JSON tags; some models override TableName to target legacy tables.
-- Indexes are created proactively to optimize frequent queries.
+- Controllers import centralized models for type-safe operations
+- Models define table names and JSON tags; some models override TableName to target legacy tables
+- Indexes are created proactively to optimize frequent queries
+- The centralized model organization reduces circular dependencies
 
 ```mermaid
 graph LR
 C1["controllers.itemController"] --> M1["models.Item"]
-C1 --> M2["models.BarcodeItem"]
-C1 --> M3["models.ItemActivityLog"]
-C2["controllers.stockInController"] --> M4["models.StockIn*"]
-C2 --> M5["models.DataBatch"]
-C3["controllers.stockOutController"] --> M6["models.StockOut*"]
-C4["controllers.masterController"] --> M7["models.Supplier"]
-CFG["config.database"] --> M2
+C1 --> M2["models.ItemPriceSnapshot"]
+C2["controllers.stockInController"] --> M3["models.StockIn*"]
+C3["controllers.stockOutController"] --> M4["models.StockOut*"]
+C4["controllers.masterController"] --> M5["models.Master*"]
+CFG["config.database"] --> M1
 CFG --> M3
+CFG --> M4
+CFG --> M5
 ```
 
 **Diagram sources**
@@ -562,8 +608,7 @@ CFG --> M3
   - Apply filters before aggregation when search terms are present.
 - Pagination: Compute total count and apply LIMIT/OFFSET to avoid loading large datasets.
 - Batch ordering: Order by expiry/buy date to support FIFO rotation and timely expiring alerts.
-
-[No sources needed since this section provides general guidance]
+- Centralized models: Reduce memory footprint through shared type definitions and improve compilation performance.
 
 ## Troubleshooting Guide
 - Connection failures: Verify MySQL credentials and host/port; ensure SIK database exists.
@@ -574,6 +619,9 @@ CFG --> M3
   - Ensure subqueries for latest batch and inventory aggregation align with actual table schemas.
 - Transaction rollbacks:
   - Inspect rollback triggers (e.g., insufficient stock, failed updates) and confirm rollback messages.
+- Model import issues:
+  - Verify centralized model imports in controllers are correct.
+  - Check for circular dependency issues in model relationships.
 
 **Section sources**
 - [database.go:13-89](file://backend/config/database.go#L13-L89)
@@ -581,20 +629,21 @@ CFG --> M3
 - [stockOutController.go:201-234](file://backend/controllers/stockOutController.go#L201-L234)
 
 ## Conclusion
-The PPA system’s GORM ORM layer is centered around a set of lightweight models that mirror SIK database tables and views. Controllers orchestrate complex queries with strategic JOINs, subqueries, and aggregations to deliver enriched inventory insights and maintain transactional integrity for stock movements. Auto-migrations and proactive indexing ensure schema consistency and performance. Extending the system involves adding new DTOs, updating controllers with appropriate joins/aggregations, and ensuring indexes are created for new query paths.
-
-[No sources needed since this section summarizes without analyzing specific files]
+The PPA system's GORM ORM layer has been significantly enhanced through the refactoring of shared data structures into centralized model files. This change improves type safety, code organization, and maintainability while preserving the existing query patterns and database integration. The centralized models provide a robust foundation for extending the system with new features and maintaining consistency across controllers. The comprehensive documentation of these models enables developers to understand and extend the data layer effectively while leveraging the improved organizational structure.
 
 ## Appendices
 - Model-to-table mapping:
   - Item → databarang
   - DataBatch → data_batch
-  - BarcodeItem → barcode_obat
-  - ItemActivityLog → item_activity_logs
-  - LocalItem → items
+  - ItemPriceSnapshot → embedded in Item operations
+  - StockIn/StockOut → specialized DTOs for operations
+  - Dashboard/MonitoringStock → analytics response structures
 - Common JSON tag conventions:
-  - snake_case for API fields (Item)
+  - snake_case for API fields (Item, StockIn, StockOut)
   - camelCase for API fields (Supplier)
-  - Mixed casing for DTOs (StockIn/StockOut)
-
-[No sources needed since this section provides general guidance]
+  - Mixed casing for analytics DTOs (Dashboard, MonitoringStock)
+- Centralized model benefits:
+  - Improved type safety through shared interfaces
+  - Reduced code duplication across controllers
+  - Better maintainability through single source of truth
+  - Enhanced developer experience with consistent naming

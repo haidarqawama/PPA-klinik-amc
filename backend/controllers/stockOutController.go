@@ -21,6 +21,11 @@ func SearchStockOutItems(c *gin.Context) {
 			databarang.nama_brng,
 			COALESCE(barcode_obat.barcode, '') AS barcode,
 			COALESCE(gudang_stock.stok, 0) AS stok,
+			EXISTS (
+				SELECT 1 FROM data_batch
+				WHERE data_batch.kode_brng = databarang.kode_brng
+				AND (data_batch.no_batch != '' OR data_batch.no_faktur != '')
+			) AS has_batch,
 			COALESCE(NULLIF(databarang.ralan, 0), NULLIF(databarang.jualbebas, 0), databarang.utama, 0) AS sell_price,
 			COALESCE(databarang.beliluar, 0) AS harga_apotek,
 			COALESCE(NULLIF(databarang.ralan, 0), databarang.jualbebas, 0) AS harga_umum,
@@ -32,7 +37,18 @@ func SearchStockOutItems(c *gin.Context) {
 			COALESCE(DATE_FORMAT(databarang.expire, '%Y-%m-%d'), '') AS expire
 		`).
 		Joins("LEFT JOIN (SELECT kode_brng, SUM(COALESCE(stok, 0)) AS stok FROM gudangbarang WHERE kd_bangsal = 'AP' GROUP BY kode_brng) gudang_stock ON databarang.kode_brng = gudang_stock.kode_brng").
-		Joins("LEFT JOIN barcode_obat ON databarang.kode_brng = barcode_obat.kode_brng").
+		Joins(`LEFT JOIN (
+			SELECT kode_brng, barcode
+			FROM barcode_obat
+			WHERE no_batch = '' AND no_faktur = ''
+			UNION
+			SELECT kode_brng, barcode FROM (
+				SELECT kode_brng, barcode, no_batch, no_faktur,
+					ROW_NUMBER() OVER (PARTITION BY kode_brng ORDER BY no_batch DESC) AS rn
+				FROM barcode_obat
+				WHERE no_batch != '' OR no_faktur != ''
+			) ranked WHERE rn = 1
+		) barcode_obat ON databarang.kode_brng = barcode_obat.kode_brng`).
 		Joins("LEFT JOIN kodesatuan ON databarang.kode_sat = kodesatuan.kode_sat").
 		Joins("LEFT JOIN industrifarmasi ON databarang.kode_industri = industrifarmasi.kode_industri").
 		Joins("LEFT JOIN golongan_barang ON databarang.kode_golongan = golongan_barang.kode").
@@ -149,9 +165,33 @@ func GetStockOutHistory(c *gin.Context) {
 	}
 
 	var total int64
-	if err := query.Count(&total).Error; err != nil {
-		c.JSON(500, gin.H{"error": "Gagal menghitung riwayat barang keluar", "detail": err.Error()})
-		return
+	if search == "" {
+		// Fast count: no JOINs needed when no search
+		countQ := config.SIK.Table("riwayat_barang_medis").
+			Where("kd_bangsal = ? AND COALESCE(keluar, 0) > 0", "AP")
+		if date != "" {
+			countQ = countQ.Where("tanggal = ?", date)
+		}
+		countQ.Count(&total)
+	} else {
+		// Count with search: only join tables needed for WHERE filter
+		likeSearch := "%" + search + "%"
+		countQ := config.SIK.Table("riwayat_barang_medis r").
+			Joins("LEFT JOIN databarang ON r.kode_brng = databarang.kode_brng").
+			Joins(`LEFT JOIN barcode_obat ON r.kode_brng = barcode_obat.kode_brng AND COALESCE(r.no_batch, '') = barcode_obat.no_batch AND COALESCE(r.no_faktur, '') = barcode_obat.no_faktur`).
+			Where("r.kd_bangsal = ? AND COALESCE(r.keluar, 0) > 0", "AP")
+		if date != "" {
+			countQ = countQ.Where("r.tanggal = ?", date)
+		}
+		countQ = countQ.Where(`
+			r.kode_brng LIKE ?
+			OR databarang.nama_brng LIKE ?
+			OR barcode_obat.barcode LIKE ?
+			OR r.petugas LIKE ?
+			OR r.no_faktur LIKE ?
+			OR r.keterangan LIKE ?
+		`, likeSearch, likeSearch, likeSearch, likeSearch, likeSearch, likeSearch)
+		countQ.Count(&total)
 	}
 
 	var summary models.StockOutHistorySummary
@@ -193,8 +233,8 @@ func AddStockOut(c *gin.Context) {
 		return
 	}
 
-	if payload.KodeBrng == "" || payload.Qty <= 0 || payload.Destination == "" || payload.NoBatch == "" || payload.NoFaktur == "" {
-		c.JSON(400, gin.H{"error": "barang, jumlah keluar, batch, faktur, dan tujuan wajib diisi"})
+	if payload.KodeBrng == "" || payload.Qty <= 0 || payload.Destination == "" {
+		c.JSON(400, gin.H{"error": "barang, jumlah keluar, dan tujuan wajib diisi"})
 		return
 	}
 
@@ -205,39 +245,17 @@ func AddStockOut(c *gin.Context) {
 	}
 
 	var stokAwal float64
-	tx.Table("gudangbarang").Select("COALESCE(stok, 0)").Where("kode_brng = ? AND kd_bangsal = 'AP' AND no_batch = ? AND no_faktur = ?", payload.KodeBrng, payload.NoBatch, payload.NoFaktur).Scan(&stokAwal)
+	tx.Table("gudangbarang").Select("COALESCE(stok, 0)").Where("kode_brng = ? AND kd_bangsal = 'AP' AND COALESCE(no_batch, '') = ? AND COALESCE(no_faktur, '') = ?", payload.KodeBrng, payload.NoBatch, payload.NoFaktur).Scan(&stokAwal)
 	if stokAwal < payload.Qty {
 		tx.Rollback()
 		c.JSON(400, gin.H{"error": "stok tidak mencukupi"})
 		return
 	}
 
-	var batch struct {
-		NoFaktur string `gorm:"column:no_faktur"`
-	}
-	batchQuery := tx.Table("gudangbarang").Select("COALESCE(no_faktur, '') AS no_faktur").Where("kode_brng = ? AND kd_bangsal = 'AP' AND no_batch = ?", payload.KodeBrng, payload.NoBatch)
-	if payload.NoFaktur != "" {
-		batchQuery = batchQuery.Where("no_faktur = ?", payload.NoFaktur)
-	}
-
-	if err := batchQuery.Take(&batch).Error; err != nil {
-		tx.Rollback()
-		c.JSON(404, gin.H{"error": "batch tidak ditemukan"})
-		return
-	}
-
 	stokAkhir := stokAwal - payload.Qty
-	if err := tx.Table("gudangbarang").Where("kode_brng = ? AND kd_bangsal = 'AP' AND no_batch = ? AND no_faktur = ?", payload.KodeBrng, payload.NoBatch, payload.NoFaktur).Update("stok", stokAkhir).Error; err != nil {
+	if err := tx.Table("gudangbarang").Where("kode_brng = ? AND kd_bangsal = 'AP' AND COALESCE(no_batch, '') = ? AND COALESCE(no_faktur, '') = ?", payload.KodeBrng, payload.NoBatch, payload.NoFaktur).Update("stok", stokAkhir).Error; err != nil {
 		tx.Rollback()
 		c.JSON(500, gin.H{"error": "Gagal memperbarui stok", "detail": err.Error()})
-		return
-	}
-
-	if err := tx.Table("data_batch").
-		Where("kode_brng = ? AND no_batch = ? AND no_faktur = ?", payload.KodeBrng, payload.NoBatch, payload.NoFaktur).
-		Update("sisa", stokAkhir).Error; err != nil {
-		tx.Rollback()
-		c.JSON(500, gin.H{"error": "Gagal memperbarui sisa batch", "detail": err.Error()})
 		return
 	}
 
@@ -275,7 +293,7 @@ func AddStockOut(c *gin.Context) {
 			"stok_awal":  stokAwal,
 			"stok_akhir": stokAkhir,
 			"no_batch":   payload.NoBatch,
-			"no_faktur":  batch.NoFaktur,
+			"no_faktur":  payload.NoFaktur,
 		},
 	})
 }
@@ -306,7 +324,7 @@ func stockOutHistoryQuery() *gorm.DB {
 			COALESCE(r.keterangan, '') AS note
 		`).
 		Joins("LEFT JOIN databarang ON r.kode_brng = databarang.kode_brng").
-		Joins("LEFT JOIN barcode_obat ON r.kode_brng = barcode_obat.kode_brng").
+		Joins(`LEFT JOIN barcode_obat ON r.kode_brng = barcode_obat.kode_brng AND COALESCE(r.no_batch, '') = barcode_obat.no_batch AND COALESCE(r.no_faktur, '') = barcode_obat.no_faktur`).
 		Joins("LEFT JOIN kodesatuan ON databarang.kode_sat = kodesatuan.kode_sat").
 		Where("r.kd_bangsal = 'AP'").
 		Where("COALESCE(r.keluar, 0) > 0")
@@ -354,7 +372,7 @@ func stockOutHistorySummaryQuery(search string, date string) *gorm.DB {
 			END), 0) AS total_value
 		`).
 		Joins("LEFT JOIN databarang ON r.kode_brng = databarang.kode_brng").
-		Joins("LEFT JOIN barcode_obat ON r.kode_brng = barcode_obat.kode_brng").
+		Joins(`LEFT JOIN barcode_obat ON r.kode_brng = barcode_obat.kode_brng AND COALESCE(r.no_batch, '') = barcode_obat.no_batch AND COALESCE(r.no_faktur, '') = barcode_obat.no_faktur`).
 		Where("r.kd_bangsal = 'AP'").
 		Where("r.keluar > 0")
 

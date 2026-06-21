@@ -2,32 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Package, TrendingUp, Calendar, DollarSign, Search, Hash } from "lucide-react";
+import { Package, TrendingUp, Calendar, DollarSign, Search, Hash, Barcode } from "lucide-react";
 import { formatDate } from '@/utils/dateFormat';
 import { apiUrl } from "@/lib/api";
-
-type StockInItem = {
-  kode_brng: string;
-  nama_brng: string;
-  barcode: string;
-  stok: number;
-  h_beli: number;
-  satuan: string;
-  supplier: string;
-  golongan: string;
-  expire: string;
-};
-
-type RecentStockIn = {
-  kode_brng: string;
-  nama_brng: string;
-  qty: number;
-  price: number;
-  date: string;
-  time: string;
-  supplier: string;
-  note: string;
-};
+import type { StockInItem, RecentStockIn } from "@/types/stockIn";
 
 const formatNumberInput = (value: string) => {
   const digits = value.replace(/[^\d]/g, "");
@@ -54,6 +32,7 @@ export default function StockIn() {
   const [expired, setExpired] = useState("");
   const [noBatch, setNoBatch] = useState("");
   const [noFaktur, setNoFaktur] = useState("");
+  const [barcode, setBarcode] = useState("");
   const [note, setNote] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -141,12 +120,13 @@ export default function StockIn() {
     setExpired("");
     setNoBatch("");
     setNoFaktur("");
+    setBarcode("");
     setNote("");
   };
 
   const handleSubmit = async () => {
-    if (!selectedItem || parseNumber(qty) <= 0 || !noBatch.trim() || !noFaktur.trim() || !tanggalPembelian) {
-      showTemporaryMessage("Pilih barang, isi jumlah masuk, no. batch, no. faktur, dan tanggal pembelian");
+    if (!selectedItem || parseNumber(qty) <= 0) {
+      showTemporaryMessage("Pilih barang dan isi jumlah masuk");
       return;
     }
 
@@ -159,10 +139,11 @@ export default function StockIn() {
           kode_brng: selectedItem.kode_brng,
           qty: parseNumber(qty),
           price: parseNumber(price),
-          tanggal_pembelian: tanggalPembelian,
+          tanggal_pembelian: tanggalPembelian || null,
           expired: expired || null,
-          no_batch: noBatch,
-          no_faktur: noFaktur,
+          no_batch: noBatch || null,
+          no_faktur: noFaktur || null,
+          barcode: barcode || null,
           note,
         }),
       });
@@ -298,7 +279,31 @@ export default function StockIn() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm mb-2">No. Batch *</label>
+                  <label className="block text-sm mb-2">Barcode</label>
+                  <div className="relative">
+                    <Barcode className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                    <input
+                      type="text"
+                      value={barcode}
+                      onChange={(event) => setBarcode(event.target.value)}
+                      placeholder="8992761123456"
+                      className="w-full pl-12 pr-4 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-end">
+                  <button
+                    type="button"
+                    className="w-full py-3 px-6 rounded-xl bg-secondary text-secondary-foreground border border-border hover:bg-secondary/80 transition-colors"
+                  >
+                    Scan Barcode
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm mb-2">No. Batch</label>
                   <input
                     type="text"
                     value={noBatch}
@@ -308,7 +313,7 @@ export default function StockIn() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm mb-2">No. Faktur *</label>
+                  <label className="block text-sm mb-2">No. Faktur</label>
                   <input
                     type="text"
                     value={noFaktur}
@@ -320,7 +325,7 @@ export default function StockIn() {
               </div>
 
               <div>
-                <label className="block text-sm mb-2">Tanggal Pembelian *</label>
+                <label className="block text-sm mb-2">Tanggal Pembelian</label>
                 <div className="relative">
                   <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <input
@@ -362,7 +367,7 @@ export default function StockIn() {
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={loading || parseNumber(qty) <= 0 || !noBatch.trim() || !noFaktur.trim() || !tanggalPembelian}
+                disabled={loading || parseNumber(qty) <= 0}
                 className="w-full py-3 px-6 rounded-xl bg-success text-success-foreground shadow-lg shadow-success/20 hover:bg-success/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? "Memproses..." : "Proses Barang Masuk"}

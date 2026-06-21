@@ -1,5 +1,0 @@
-- Data models in `backend/models/dashboard.go` define structured response payloads including summary statistics, distribution metrics, and paginated activity feeds.
-- Controller logic in `backend/controllers/dashboard.go` implements a concurrent data fetching strategy using goroutines and WaitGroups to parallelize six distinct database queries against the `sik` schema.
-- In-memory caching with a 30-second TTL is implemented using a mutex-protected map keyed by pagination parameters to reduce database load.
-- Shared SQL fragments for stock aggregation and expiration filtering are extracted into `stockQuery.go` and `expireFilters.go` to ensure consistency across queries.
-- Database connectivity and index management are handled externally in `backend/config/database.go`, which ensures required indexes exist for dashboard query performance.

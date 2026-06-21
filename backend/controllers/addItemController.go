@@ -17,8 +17,8 @@ func AddItem(c *gin.Context) {
 		return
 	}
 
-	if item.NamaBarang == "" || item.Supplier == "" || item.Satuan == "" || item.Golongan == "" || item.Jenis == "" || item.NoBatch == "" || item.NoFaktur == "" || item.TanggalPembelian == "" || item.Stok <= 0 {
-		c.JSON(400, gin.H{"error": "semua field wajib diisi termasuk no. batch, no. faktur, dan tanggal pembelian"})
+	if item.NamaBarang == "" || item.Supplier == "" || item.Satuan == "" || item.Golongan == "" || item.Jenis == "" || item.Stok <= 0 {
+		c.JSON(400, gin.H{"error": "field wajib diisi: nama barang, supplier, satuan, golongan, jenis, dan stok awal"})
 		return
 	}
 
@@ -107,7 +107,12 @@ func AddItem(c *gin.Context) {
 	}
 
 	if item.Barcode != "" {
-		if err := tx.Create(&models.BarcodeItem{KodeBrng: item.KodeBarang, Barcode: item.Barcode}).Error; err != nil {
+		if err := tx.Create(&models.BarcodeItem{
+			KodeBrng: item.KodeBarang,
+			NoBatch:  item.NoBatch,
+			NoFaktur: item.NoFaktur,
+			Barcode:  item.Barcode,
+		}).Error; err != nil {
 			tx.Rollback()
 			c.JSON(500, gin.H{"error": "gagal menyimpan barcode", "detail": err.Error()})
 			return
@@ -136,36 +141,38 @@ func AddItem(c *gin.Context) {
 		return
 	}
 
-	expiredDate := ""
-	if item.Expired != nil {
-		expiredDate = item.Expired.Format("2006-01-02")
-	}
+	if item.NoBatch != "" || item.NoFaktur != "" {
+		expiredDate := ""
+		if item.Expired != nil {
+			expiredDate = item.Expired.Format("2006-01-02")
+		}
 
-	if err := tx.Table("data_batch").Create(map[string]interface{}{
-		"no_batch":       item.NoBatch,
-		"kode_brng":      item.KodeBarang,
-		"tgl_beli":       item.TanggalPembelian,
-		"tgl_kadaluarsa": expiredDate,
-		"asal":           "Penerimaan",
-		"no_faktur":      item.NoFaktur,
-		"jumlahbeli":     item.Stok,
-		"sisa":           item.Stok,
-		"dasar":          prices.Dasar,
-		"h_beli":         prices.HBeli,
-		"ralan":          prices.Ralan,
-		"kelas1":         prices.Kelas1,
-		"kelas2":         prices.Kelas2,
-		"kelas3":         prices.Kelas3,
-		"utama":          prices.Utama,
-		"vip":            prices.Vip,
-		"vvip":           prices.Vvip,
-		"beliluar":       prices.Beliluar,
-		"jualbebas":      prices.Jualbebas,
-		"karyawan":       prices.Karyawan,
-	}).Error; err != nil {
-		tx.Rollback()
-		c.JSON(500, gin.H{"error": "gagal menyimpan data batch", "detail": err.Error()})
-		return
+		if err := tx.Table("data_batch").Create(map[string]interface{}{
+			"no_batch":       item.NoBatch,
+			"kode_brng":      item.KodeBarang,
+			"tgl_beli":       item.TanggalPembelian,
+			"tgl_kadaluarsa": expiredDate,
+			"asal":           "Penerimaan",
+			"no_faktur":      item.NoFaktur,
+			"jumlahbeli":     item.Stok,
+			"sisa":           item.Stok,
+			"dasar":          prices.Dasar,
+			"h_beli":         prices.HBeli,
+			"ralan":          prices.Ralan,
+			"kelas1":         prices.Kelas1,
+			"kelas2":         prices.Kelas2,
+			"kelas3":         prices.Kelas3,
+			"utama":          prices.Utama,
+			"vip":            prices.Vip,
+			"vvip":           prices.Vvip,
+			"beliluar":       prices.Beliluar,
+			"jualbebas":      prices.Jualbebas,
+			"karyawan":       prices.Karyawan,
+		}).Error; err != nil {
+			tx.Rollback()
+			c.JSON(500, gin.H{"error": "gagal menyimpan data batch", "detail": err.Error()})
+			return
+		}
 	}
 
 	now := time.Now()

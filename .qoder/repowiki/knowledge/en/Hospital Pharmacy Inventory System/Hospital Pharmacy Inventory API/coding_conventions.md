@@ -1,3 +1,0 @@
-- Controllers use raw SQL queries via GORM's `Raw` and `Scan` methods for complex aggregations and joins instead of relying solely on GORM's query builder.
-- Shared SQL fragments and filter conditions are defined as package-level constants in dedicated files (e.g., `stockQuery.go`, `expireFilters.go`) to ensure consistency across multiple controllers.
-- HTTP responses consistently wrap payload data in a `data` key (e.g., `c.JSON(200, gin.H{"data": ...})`) for successful requests.

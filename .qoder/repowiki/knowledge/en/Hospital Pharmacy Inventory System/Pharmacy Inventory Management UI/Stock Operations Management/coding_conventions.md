@@ -1,4 +1,0 @@
-- Debounced search inputs using `setTimeout` and `AbortController` to prevent race conditions during API calls.
-- Centralized currency formatting using `toLocaleString('id-ID')` prefixed with 'Rp' for Indonesian Rupiah display.
-- Temporary success/error messages implemented via `setTimeout` state resets instead of external toast libraries.
-- Consistent use of `apiUrl` wrapper for all backend requests to manage base URL configuration.
