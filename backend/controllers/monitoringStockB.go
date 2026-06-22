@@ -145,9 +145,17 @@ func GetMonitoringStock(c *gin.Context) {
 
 	if err := config.SIK.Raw(`
 		SELECT COUNT(*)
-		FROM databarang
-		WHERE expire BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL ? DAY)
-		`+validExpireDateWhere+`
+		FROM (
+			SELECT STR_TO_DATE(expire, '%Y-%m-%d') AS expire_date
+			FROM databarang
+			WHERE expire IS NOT NULL 
+				AND expire NOT IN ('', '0000-00-00')
+				AND STR_TO_DATE(expire, '%Y-%m-%d') IS NOT NULL
+				AND expire >= '1990-01-01'
+				AND YEAR(expire) >= 1990
+				AND YEAR(expire) <= YEAR(CURDATE()) + 15
+		) AS valid_dates
+		WHERE expire_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL ? DAY)
 	`, expiringSoonDays).Scan(&expiringSoonCount).Error; err != nil {
 		c.JSON(500, gin.H{"error": "Gagal mengambil data mendekati expired", "detail": err.Error()})
 		return
@@ -155,9 +163,17 @@ func GetMonitoringStock(c *gin.Context) {
 
 	if err := config.SIK.Raw(`
 		SELECT COUNT(*)
-		FROM databarang
-		WHERE expire < CURDATE()
-		` + validExpireDateWhere + `
+		FROM (
+			SELECT STR_TO_DATE(expire, '%Y-%m-%d') AS expire_date
+			FROM databarang
+			WHERE expire IS NOT NULL 
+				AND expire NOT IN ('', '0000-00-00')
+				AND STR_TO_DATE(expire, '%Y-%m-%d') IS NOT NULL
+				AND expire >= '1990-01-01'
+				AND YEAR(expire) >= 1990
+				AND YEAR(expire) <= YEAR(CURDATE()) + 15
+		) AS valid_dates
+		WHERE expire_date < CURDATE()
 	`).Scan(&expiredCount).Error; err != nil {
 		c.JSON(500, gin.H{"error": "Gagal mengambil data expired", "detail": err.Error()})
 		return

@@ -106,12 +106,15 @@ func GetDashboard(c *gin.Context) {
 		var counts expireCounts
 		e := config.SIK.Raw(`
 			SELECT
-				SUM(CASE WHEN expire BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END) AS expiring_soon,
-				SUM(CASE WHEN expire < CURDATE() THEN 1 ELSE 0 END) AS expired
-			FROM databarang
-			WHERE expire IS NOT NULL
-				AND expire <> ''
-				AND expire <> '0000-00-00'
+				SUM(CASE WHEN expire_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END) AS expiring_soon,
+				SUM(CASE WHEN expire_date < CURDATE() THEN 1 ELSE 0 END) AS expired
+			FROM (
+				SELECT STR_TO_DATE(expire, '%Y-%m-%d') AS expire_date
+				FROM databarang
+				WHERE expire IS NOT NULL 
+					AND expire NOT IN ('', '0000-00-00')
+					AND STR_TO_DATE(expire, '%Y-%m-%d') IS NOT NULL
+			) AS valid_dates
 		`).Scan(&counts).Error
 		if e != nil {
 			captureErr(e)
@@ -175,7 +178,6 @@ func GetDashboard(c *gin.Context) {
 	}()
 
 	// 5. Stock movement (last 5 months)
-	// 5. Stock movement (last 4 months)
 	go func() {
 		defer wg.Done()
 		e := config.SIK.Raw(`
@@ -185,7 +187,7 @@ func GetDashboard(c *gin.Context) {
 				SUM(keluar) AS barang_keluar
 			FROM riwayat_barang_medis
 			WHERE kd_bangsal = 'AP'
-				AND tanggal >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 3 MONTH), '%Y-%m-01')
+				AND tanggal >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 5 MONTH), '%Y-%m-01')
 				AND tanggal <  DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 1 MONTH), '%Y-%m-01')
 			GROUP BY DATE_FORMAT(tanggal, '%Y-%m')
 			ORDER BY month ASC

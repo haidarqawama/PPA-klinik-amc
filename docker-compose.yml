@@ -1,0 +1,44 @@
+services:
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+      MYSQL_DATABASE: sik
+
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d
+
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 120s
+
+  backend:
+    build: ./backend
+    container_name: ppa-backend
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build: ./frontend
+    container_name: ppa-frontend
+
+    depends_on:
+      - backend
+
+    ports:
+      - "3000:3000"
+
+volumes:
+  mysql_data:

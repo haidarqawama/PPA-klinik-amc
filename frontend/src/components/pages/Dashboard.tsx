@@ -204,6 +204,11 @@ export default function Dashboard() {
   const expiredCountText = expiredCount != null ? expiredCount.toLocaleString() : "-";
   const inventoryText = summary?.inventory_value != null ? `Rp${summary.inventory_value.toLocaleString("id-ID")}` : "-";
 
+  // Calculate profit from stock movement (total masuk - total keluar)
+  const totalMasuk = stockMovement.reduce((sum, item) => sum + Number(item.barang_masuk), 0);
+  const totalKeluar = stockMovement.reduce((sum, item) => sum + Number(item.barang_keluar), 0);
+  const profit = totalMasuk - totalKeluar;
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
@@ -342,72 +347,80 @@ export default function Dashboard() {
           Memuat data dashboard...
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <div className="bg-card rounded-2xl border border-border p-6 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Stok Barang</p>
-                <p className="text-2xl font-semibold mt-1">{totalStockText}</p>
-                <p className="text-xs text-success mt-1">+12% dari bulan lalu</p>
+        <>
+          {/* Row 1: 2 cards */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="bg-card rounded-2xl border border-border p-6 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Stok Barang</p>
+                  <p className="text-2xl font-semibold mt-1">{totalStockText}</p>
+                  <p className="text-xs text-success mt-1">+12% dari bulan lalu</p>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <Package className="w-6 h-6 text-primary" />
+                </div>
               </div>
-              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                <Package className="w-6 h-6 text-primary" />
+            </div>
+
+            <div className="bg-card rounded-2xl border border-border p-6 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Stok Hampir Habis</p>
+                  <p className="text-2xl font-semibold mt-1 text-warning">{lowStockText}</p>
+                  <p className="text-xs text-warning mt-1">Perlu restock segera</p>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-warning/10 flex items-center justify-center">
+                  <AlertTriangle className="w-6 h-6 text-warning" />
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="bg-card rounded-2xl border border-border p-6 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Stok Hampir Habis</p>
-                <p className="text-2xl font-semibold mt-1 text-warning">{lowStockText}</p>
-                <p className="text-xs text-warning mt-1">Perlu restock segera</p>
+          {/* Row 2: 2 cards */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="bg-card rounded-2xl border border-border p-6 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Obat Sudah Expired</p>
+                  <p className="text-2xl font-semibold mt-1 text-destructive">{expiredCountText}</p>
+                  <p className="text-xs text-destructive mt-1">Dari tabel data barang</p>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-destructive/10 flex items-center justify-center">
+                  <Calendar className="w-6 h-6 text-destructive" />
+                </div>
               </div>
-              <div className="w-12 h-12 rounded-xl bg-warning/10 flex items-center justify-center">
-                <AlertTriangle className="w-6 h-6 text-warning" />
+            </div>
+
+            <div className="bg-card rounded-2xl border border-border p-6 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Mendekati Expired</p>
+                  <p className="text-2xl font-semibold mt-1 text-destructive">{expiringText}</p>
+                  <p className="text-xs text-destructive mt-1">Dalam 30 hari ke depan</p>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-destructive/10 flex items-center justify-center">
+                  <Calendar className="w-6 h-6 text-destructive" />
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="bg-card rounded-2xl border border-border p-6 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Obat Sudah Expired</p>
-                <p className="text-2xl font-semibold mt-1 text-destructive">{expiredCountText}</p>
-                <p className="text-xs text-destructive mt-1">Dari tabel data barang</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-destructive/10 flex items-center justify-center">
-                <Calendar className="w-6 h-6 text-destructive" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-card rounded-2xl border border-border p-6 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Mendekati Expired</p>
-                <p className="text-2xl font-semibold mt-1 text-destructive">{expiringText}</p>
-                <p className="text-xs text-destructive mt-1">Dalam 30 hari ke depan</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-destructive/10 flex items-center justify-center">
-                <Calendar className="w-6 h-6 text-destructive" />
+          {/* Row 3: 1 card full width */}
+          <div className="w-full">
+            <div className="bg-card rounded-2xl border border-border p-6 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Nilai Inventory</p>
+                  <p className="text-2xl font-semibold mt-1">{inventoryText}</p>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-success/10 flex items-center justify-center">
+                  <Banknote className="w-6 h-6 text-success" />
+                </div>
               </div>
             </div>
           </div>
-
-          <div className="bg-card rounded-2xl border border-border p-6 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Nilai Inventory</p>
-                <p className="text-2xl font-semibold mt-1">{inventoryText}</p>
-                <p className="text-xs text-success mt-1">Keuntungan: Rp52M</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-success/10 flex items-center justify-center">
-                <Banknote className="w-6 h-6 text-success" />
-              </div>
-            </div>
-          </div>
-        </div>
+        </>
       )}
 
       {/* Charts Section */}

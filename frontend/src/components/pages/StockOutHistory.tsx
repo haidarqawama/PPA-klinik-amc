@@ -225,7 +225,7 @@ export default function StockOutHistory() {
       <div className="bg-card rounded-2xl border border-border shadow-sm">
         <div className="overflow-x-auto overflow-y-auto max-h-[65vh]">
           <table className="w-full">
-            <thead className="bg-muted/30 border-b border-border sticky top-0 z-10">
+            <thead className="bg-muted border-b border-border sticky top-0 z-10">
               <tr>
                 <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase">Waktu</th>
                 <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase">Barang</th>

@@ -3,6 +3,7 @@ package config
 import (
 	"backend/models"
 	"fmt"
+	"time"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -15,19 +16,26 @@ func ConnectDatabase() {
 	var err error
 
 	// =========================
-	// CONNECT DATABASE SIK
+	// CONNECT DATABASE SIK (with retry)
 	// =========================
 
-	SIK, err =
-		gorm.Open(
-			mysql.Open(
-				"root:@tcp(127.0.0.1:3306)/sik",
-			),
+	maxRetries := 90
+	retryInterval := 2 * time.Second
+
+	for i := 0; i < maxRetries; i++ {
+		SIK, err = gorm.Open(
+			mysql.Open("root:@tcp(mysql:3306)/sik"),
 			&gorm.Config{},
 		)
+		if err == nil {
+			break
+		}
+		fmt.Printf("Waiting for database... attempt %d/%d\n", i+1, maxRetries)
+		time.Sleep(retryInterval)
+	}
 
 	if err != nil {
-		panic(err)
+		panic(fmt.Sprintf("Failed to connect to database after %d attempts: %v", maxRetries, err))
 	}
 
 	// =========================
