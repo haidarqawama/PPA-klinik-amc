@@ -77,7 +77,7 @@ func GetRecentStockIn(c *gin.Context) {
 		LEFT JOIN databarang ON r.kode_brng = databarang.kode_brng
 		LEFT JOIN industrifarmasi ON databarang.kode_industri = industrifarmasi.kode_industri
 		WHERE r.kd_bangsal = 'AP'
-			AND COALESCE(r.masuk, 0) > 0
+			AND r.masuk > 0
 		ORDER BY r.tanggal DESC, r.jam DESC
 		LIMIT 10
 	`).Scan(&rows).Error; err != nil {
@@ -107,73 +107,30 @@ func GetStockInHistory(c *gin.Context) {
 	}
 
 	var rows []models.StockInHistory
-	query := config.SIK.
-		Table("riwayat_barang_medis r").
-		Select(`
-			r.kode_brng,
-			COALESCE(databarang.nama_brng, r.kode_brng) AS nama_brng,
-			COALESCE(barcode_obat.barcode, '') AS barcode,
-			COALESCE(r.masuk, 0) AS qty,
-			COALESCE(kodesatuan.satuan, databarang.kode_sat, '') AS unit,
-			COALESCE(databarang.h_beli, 0) AS buy_price,
-			COALESCE(r.masuk, 0) * COALESCE(databarang.h_beli, 0) AS total_cost,
-			COALESCE(DATE_FORMAT(databarang.expire, '%Y-%m-%d'), '') AS expired,
-			COALESCE(DATE_FORMAT(r.tanggal, '%Y-%m-%d'), '') AS date,
-			IFNULL(TIME_FORMAT(r.jam, '%H:%i:%s'), '') AS time,
-			COALESCE(industrifarmasi.nama_industri, '') AS supplier,
-			COALESCE(r.petugas, '') AS operator,
-			COALESCE(r.keterangan, '') AS note
-		`).
-		Joins("LEFT JOIN databarang ON r.kode_brng = databarang.kode_brng").
-		Joins(`LEFT JOIN barcode_obat ON r.kode_brng = barcode_obat.kode_brng AND COALESCE(r.no_batch, '') = barcode_obat.no_batch AND COALESCE(r.no_faktur, '') = barcode_obat.no_faktur`).
-		Joins("LEFT JOIN kodesatuan ON databarang.kode_sat = kodesatuan.kode_sat").
-		Joins("LEFT JOIN industrifarmasi ON databarang.kode_industri = industrifarmasi.kode_industri").
-		Where("r.kd_bangsal = 'AP'").
-		Where("COALESCE(r.masuk, 0) > 0")
-
-	if search != "" {
-		likeSearch := "%" + search + "%"
-		query = query.Where(`
-			r.kode_brng LIKE ?
-			OR databarang.nama_brng LIKE ?
-			OR barcode_obat.barcode LIKE ?
-			OR r.petugas LIKE ?
-			OR industrifarmasi.nama_industri LIKE ?
-			OR r.keterangan LIKE ?
-		`, likeSearch, likeSearch, likeSearch, likeSearch, likeSearch, likeSearch)
-	}
-
-	if date != "" {
-		query = query.Where("r.tanggal = ?", date)
-	}
 
 	var total int64
 	if search == "" {
 		// Fast count: no JOINs needed when no search
 		countQ := config.SIK.Table("riwayat_barang_medis").
-			Where("kd_bangsal = ? AND COALESCE(masuk, 0) > 0", "AP")
+			Where("kd_bangsal = ? AND masuk > 0", "AP")
 		if date != "" {
 			countQ = countQ.Where("tanggal = ?", date)
 		}
 		countQ.Count(&total)
 	} else {
-		// Count with search: only join tables needed for WHERE filter
+		// Count with search: EXISTS avoids row multiplication from JOINs
 		likeSearch := "%" + search + "%"
 		countQ := config.SIK.Table("riwayat_barang_medis r").
-			Joins("LEFT JOIN databarang ON r.kode_brng = databarang.kode_brng").
-			Joins(`LEFT JOIN barcode_obat ON r.kode_brng = barcode_obat.kode_brng AND COALESCE(r.no_batch, '') = barcode_obat.no_batch AND COALESCE(r.no_faktur, '') = barcode_obat.no_faktur`).
-			Joins("LEFT JOIN industrifarmasi ON databarang.kode_industri = industrifarmasi.kode_industri").
-			Where("r.kd_bangsal = ? AND COALESCE(r.masuk, 0) > 0", "AP")
+			Where("r.kd_bangsal = ? AND r.masuk > 0", "AP")
 		if date != "" {
 			countQ = countQ.Where("r.tanggal = ?", date)
 		}
 		countQ = countQ.Where(`
 			r.kode_brng LIKE ?
-			OR databarang.nama_brng LIKE ?
-			OR barcode_obat.barcode LIKE ?
 			OR r.petugas LIKE ?
-			OR industrifarmasi.nama_industri LIKE ?
 			OR r.keterangan LIKE ?
+			OR EXISTS (SELECT 1 FROM databarang d LEFT JOIN industrifarmasi i ON d.kode_industri = i.kode_industri WHERE d.kode_brng = r.kode_brng AND (d.nama_brng LIKE ? OR i.nama_industri LIKE ?))
+			OR EXISTS (SELECT 1 FROM barcode_obat WHERE barcode_obat.kode_brng = r.kode_brng AND COALESCE(r.no_batch, '') = barcode_obat.no_batch AND COALESCE(r.no_faktur, '') = barcode_obat.no_faktur AND barcode_obat.barcode LIKE ?)
 		`, likeSearch, likeSearch, likeSearch, likeSearch, likeSearch, likeSearch)
 		countQ.Count(&total)
 	}
@@ -194,9 +151,100 @@ func GetStockInHistory(c *gin.Context) {
 	}
 
 	offset := (page - 1) * limit
-	if err := query.Order("r.tanggal DESC, r.jam DESC").Limit(limit).Offset(offset).Scan(&rows).Error; err != nil {
-		c.JSON(500, gin.H{"error": "Gagal mengambil riwayat barang masuk", "detail": err.Error()})
-		return
+
+	selectCols := `
+		r.kode_brng,
+		COALESCE(databarang.nama_brng, r.kode_brng) AS nama_brng,
+		COALESCE(barcode_obat.barcode, '') AS barcode,
+		COALESCE(r.masuk, 0) AS qty,
+		COALESCE(kodesatuan.satuan, databarang.kode_sat, '') AS unit,
+		COALESCE(databarang.h_beli, 0) AS buy_price,
+		COALESCE(r.masuk, 0) * COALESCE(databarang.h_beli, 0) AS total_cost,
+		COALESCE(DATE_FORMAT(databarang.expire, '%Y-%m-%d'), '') AS expired,
+		COALESCE(DATE_FORMAT(r.tanggal, '%Y-%m-%d'), '') AS date,
+		IFNULL(TIME_FORMAT(r.jam, '%H:%i:%s'), '') AS time,
+		COALESCE(industrifarmasi.nama_industri, '') AS supplier,
+		COALESCE(r.petugas, '') AS operator,
+		COALESCE(r.keterangan, '') AS note`
+
+	joins := `
+		LEFT JOIN databarang ON r.kode_brng = databarang.kode_brng
+		LEFT JOIN barcode_obat ON r.kode_brng = barcode_obat.kode_brng AND COALESCE(r.no_batch, '') = barcode_obat.no_batch AND COALESCE(r.no_faktur, '') = barcode_obat.no_faktur
+		LEFT JOIN kodesatuan ON databarang.kode_sat = kodesatuan.kode_sat
+		LEFT JOIN industrifarmasi ON databarang.kode_industri = industrifarmasi.kode_industri`
+
+	if search == "" {
+		// No search: deferred join with covering index. Subquery does backward index
+		// scan, checks masuk > 0 from index, stops at 100. No sort, no table lookup.
+		baseWhere := "kd_bangsal = 'AP' AND masuk > 0"
+		if date != "" {
+			baseWhere += " AND tanggal = ?"
+		}
+		var args []interface{}
+		if date != "" {
+			args = append(args, date)
+		}
+		args = append(args, limit, offset)
+		if err := config.SIK.Raw(`
+			SELECT `+selectCols+`
+			FROM (
+				SELECT kode_brng, tanggal, jam,
+					COALESCE(no_batch, '') AS no_batch,
+					COALESCE(no_faktur, '') AS no_faktur
+				FROM riwayat_barang_medis
+				WHERE `+baseWhere+`
+				ORDER BY tanggal DESC, jam DESC
+				LIMIT ? OFFSET ?
+			) AS k
+			JOIN riwayat_barang_medis r
+				ON r.kode_brng = k.kode_brng AND r.tanggal = k.tanggal AND r.jam = k.jam
+				AND COALESCE(r.no_batch, '') = k.no_batch AND COALESCE(r.no_faktur, '') = k.no_faktur
+			`+joins+`
+			ORDER BY r.tanggal DESC, r.jam DESC
+		`, args...).Scan(&rows).Error; err != nil {
+			c.JSON(500, gin.H{"error": "Gagal mengambil riwayat barang masuk", "detail": err.Error()})
+			return
+		}
+	} else {
+		// With search: deferred join + EXISTS for cross-table search.
+		// EXISTS avoids row multiplication from barcode_obat JOIN and allows
+		// short-circuit OR evaluation. Subquery selects only key columns.
+		likeSearch := "%" + search + "%"
+		baseWhere := "r.kd_bangsal = 'AP' AND r.masuk > 0"
+		var args []interface{}
+		if date != "" {
+			baseWhere += " AND r.tanggal = ?"
+			args = append(args, date)
+		}
+		searchCond := ` AND (
+			r.kode_brng LIKE ?
+			OR r.petugas LIKE ?
+			OR r.keterangan LIKE ?
+			OR EXISTS (SELECT 1 FROM databarang d LEFT JOIN industrifarmasi i ON d.kode_industri = i.kode_industri WHERE d.kode_brng = r.kode_brng AND (d.nama_brng LIKE ? OR i.nama_industri LIKE ?))
+			OR EXISTS (SELECT 1 FROM barcode_obat WHERE barcode_obat.kode_brng = r.kode_brng AND COALESCE(r.no_batch, '') = barcode_obat.no_batch AND COALESCE(r.no_faktur, '') = barcode_obat.no_faktur AND barcode_obat.barcode LIKE ?)
+		)`
+		args = append(args, likeSearch, likeSearch, likeSearch, likeSearch, likeSearch, likeSearch)
+		args = append(args, limit, offset)
+		if err := config.SIK.Raw(`
+			SELECT `+selectCols+`
+			FROM (
+				SELECT kode_brng, tanggal, jam,
+					COALESCE(no_batch, '') AS no_batch,
+					COALESCE(no_faktur, '') AS no_faktur
+				FROM riwayat_barang_medis r
+				WHERE `+baseWhere+searchCond+`
+				ORDER BY r.tanggal DESC, r.jam DESC
+				LIMIT ? OFFSET ?
+			) AS k
+			JOIN riwayat_barang_medis r
+				ON r.kode_brng = k.kode_brng AND r.tanggal = k.tanggal AND r.jam = k.jam
+				AND COALESCE(r.no_batch, '') = k.no_batch AND COALESCE(r.no_faktur, '') = k.no_faktur
+			`+joins+`
+			ORDER BY r.tanggal DESC, r.jam DESC
+		`, args...).Scan(&rows).Error; err != nil {
+			c.JSON(500, gin.H{"error": "Gagal mengambil riwayat barang masuk", "detail": err.Error()})
+			return
+		}
 	}
 
 	c.JSON(200, gin.H{
@@ -211,7 +259,13 @@ func GetStockInHistory(c *gin.Context) {
 }
 
 func stockInHistorySummaryQuery(search string, date string) *gorm.DB {
-	// Tanpa search, pre-aggregate per kode_brng dulu sebelum join databarang.
+	// No search, no date: read from pre-computed summary table (<1ms)
+	if search == "" && date == "" {
+		return config.SIK.Table("stock_history_summary").
+			Select("total_qty_in AS total_qty, total_value_in AS total_value")
+	}
+
+	// Tanpa search, date filter: pre-aggregate per kode_brng sebelum join databarang.
 	// Ini mengubah join "satu row per transaksi" menjadi "satu row per barang",
 	// drastis mengurangi beban join dan I/O.
 	if search == "" {
@@ -236,8 +290,9 @@ func stockInHistorySummaryQuery(search string, date string) *gorm.DB {
 			Joins("LEFT JOIN databarang ON t.kode_brng = databarang.kode_brng")
 	}
 
-	// Jika ada search, filter harus diterapkan per baris sebelum aggregate,
-	// sehingga tetap perlu join semua tabel yang digunakan untuk pencarian.
+	// Jika ada search, filter harus diterapkan per baris sebelum aggregate.
+	// EXISTS menggantikan barcode_obat dan industrifarmasi JOIN untuk menghindari
+	// row multiplication yang dapat menyebabkan SUM salah.
 	query := config.SIK.
 		Table("riwayat_barang_medis r").
 		Select(`
@@ -249,17 +304,14 @@ func stockInHistorySummaryQuery(search string, date string) *gorm.DB {
 		Where("r.masuk > 0")
 
 	likeSearch := "%" + search + "%"
-	query = query.
-		Joins(`LEFT JOIN barcode_obat ON r.kode_brng = barcode_obat.kode_brng AND COALESCE(r.no_batch, '') = barcode_obat.no_batch AND COALESCE(r.no_faktur, '') = barcode_obat.no_faktur`).
-		Joins("LEFT JOIN industrifarmasi ON databarang.kode_industri = industrifarmasi.kode_industri").
-		Where(`
-			r.kode_brng LIKE ?
-			OR databarang.nama_brng LIKE ?
-			OR barcode_obat.barcode LIKE ?
-			OR r.petugas LIKE ?
-			OR industrifarmasi.nama_industri LIKE ?
-			OR r.keterangan LIKE ?
-		`, likeSearch, likeSearch, likeSearch, likeSearch, likeSearch, likeSearch)
+	query = query.Where(`
+		r.kode_brng LIKE ?
+		OR databarang.nama_brng LIKE ?
+		OR r.petugas LIKE ?
+		OR r.keterangan LIKE ?
+		OR EXISTS (SELECT 1 FROM industrifarmasi WHERE industrifarmasi.kode_industri = databarang.kode_industri AND industrifarmasi.nama_industri LIKE ?)
+		OR EXISTS (SELECT 1 FROM barcode_obat WHERE barcode_obat.kode_brng = r.kode_brng AND COALESCE(r.no_batch, '') = barcode_obat.no_batch AND COALESCE(r.no_faktur, '') = barcode_obat.no_faktur AND barcode_obat.barcode LIKE ?)
+	`, likeSearch, likeSearch, likeSearch, likeSearch, likeSearch, likeSearch)
 
 	if date != "" {
 		query = query.Where("r.tanggal = ?", date)

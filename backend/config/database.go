@@ -3,10 +3,13 @@ package config
 import (
 	"backend/models"
 	"fmt"
+	"log"
+	"os"
 	"time"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 var SIK *gorm.DB
@@ -22,10 +25,20 @@ func ConnectDatabase() {
 	maxRetries := 90
 	retryInterval := 2 * time.Second
 
+	gormLogger := logger.New(
+		log.New(os.Stdout, "\r\n", log.LstdFlags),
+		logger.Config{
+			SlowThreshold: 200 * time.Millisecond,
+			LogLevel:      logger.Warn,
+		},
+	)
+
 	for i := 0; i < maxRetries; i++ {
 		SIK, err = gorm.Open(
 			mysql.Open("root:@tcp(mysql:3306)/sik"),
-			&gorm.Config{},
+			&gorm.Config{
+				Logger: gormLogger,
+			},
 		)
 		if err == nil {
 			break
@@ -55,10 +68,20 @@ func ConnectDatabase() {
 		)
 	}
 
+	// Migrate idx_rbm_dashboard_recent to covering index (includes keluar, masuk)
+	// so history subqueries can check keluar > 0 / masuk > 0 without table lookups.
+	var idxColCount int64
+	SIK.Raw(`SELECT COUNT(*) FROM information_schema.statistics
+		WHERE table_schema = DATABASE() AND table_name = 'riwayat_barang_medis'
+		AND index_name = 'idx_rbm_dashboard_recent'`).Scan(&idxColCount)
+	if idxColCount > 0 && idxColCount <= 3 {
+		SIK.Exec("ALTER TABLE riwayat_barang_medis DROP INDEX idx_rbm_dashboard_recent")
+	}
+
 	ensureIndex(
 		"riwayat_barang_medis",
 		"idx_rbm_dashboard_recent",
-		"CREATE INDEX idx_rbm_dashboard_recent ON riwayat_barang_medis (kd_bangsal, tanggal, jam)",
+		"CREATE INDEX idx_rbm_dashboard_recent ON riwayat_barang_medis (kd_bangsal, tanggal, jam, keluar, masuk)",
 	)
 
 	ensureIndex(
@@ -91,9 +114,165 @@ func ConnectDatabase() {
 		"CREATE INDEX idx_rbm_stockout_summary ON riwayat_barang_medis (kd_bangsal, kode_brng, no_faktur, keluar)",
 	)
 
-	fmt.Println(
-		"Database connected",
+	ensureIndex(
+		"riwayat_barang_medis",
+		"idx_rbm_stock_movement",
+		"CREATE INDEX idx_rbm_stock_movement ON riwayat_barang_medis (kd_bangsal, tanggal, masuk, keluar)",
 	)
+
+	ensureIndex(
+		"barcode_obat",
+		"idx_barcode_obat_lookup",
+		"CREATE INDEX idx_barcode_obat_lookup ON barcode_obat (kode_brng, no_batch, no_faktur, barcode(100))",
+	)
+
+	// idx_rbm_dashboard_recent (kd_bangsal, tanggal, jam, keluar, masuk) already exists above
+
+	// =========================
+	// CREATE SUMMARY TABLE FOR STOCK MOVEMENT
+	// =========================
+	SIK.Exec(`
+		CREATE TABLE IF NOT EXISTS dashboard_stock_movement (
+			month CHAR(7) NOT NULL,
+			kd_bangsal VARCHAR(5) NOT NULL,
+			barang_masuk DOUBLE NOT NULL DEFAULT 0,
+			barang_keluar DOUBLE NOT NULL DEFAULT 0,
+			PRIMARY KEY (month, kd_bangsal),
+			INDEX idx_dcm_bangsal (kd_bangsal, month)
+		)
+	`)
+
+	// =========================
+	// CREATE SUMMARY TABLE FOR STOCK HISTORY (total qty, value & count)
+	// =========================
+	SIK.Exec(`
+		CREATE TABLE IF NOT EXISTS stock_history_summary (
+			id TINYINT UNSIGNED NOT NULL DEFAULT 1 PRIMARY KEY,
+			total_qty_out DOUBLE NOT NULL DEFAULT 0,
+			total_value_out DOUBLE NOT NULL DEFAULT 0,
+			total_qty_in DOUBLE NOT NULL DEFAULT 0,
+			total_value_in DOUBLE NOT NULL DEFAULT 0,
+			total_count_out INT NOT NULL DEFAULT 0,
+			total_count_in INT NOT NULL DEFAULT 0
+		)
+	`)
+	// Migration: add count columns if table already exists
+	SIK.Exec("ALTER TABLE stock_history_summary ADD COLUMN total_count_out INT NOT NULL DEFAULT 0")
+	SIK.Exec("ALTER TABLE stock_history_summary ADD COLUMN total_count_in INT NOT NULL DEFAULT 0")
+
+	// Initial refresh
+	RefreshStockMovementSummary()
+	RefreshStockHistorySummary()
+
+	fmt.Println("Database connected")
+
+	// Background refresh every 5 minutes
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			RefreshStockMovementSummary()
+			RefreshStockHistorySummary()
+		}
+	}()
+}
+
+// RefreshStockMovementSummary rebuilds the monthly stock movement summary table
+func RefreshStockMovementSummary() {
+	err := SIK.Exec(`
+		INSERT INTO dashboard_stock_movement (month, kd_bangsal, barang_masuk, barang_keluar)
+		SELECT
+			DATE_FORMAT(tanggal, '%Y-%m') AS month,
+			kd_bangsal,
+			SUM(masuk)  AS barang_masuk,
+			SUM(keluar) AS barang_keluar
+		FROM riwayat_barang_medis
+		WHERE tanggal >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 6 MONTH), '%Y-%m-01')
+		GROUP BY DATE_FORMAT(tanggal, '%Y-%m'), kd_bangsal
+		ON DUPLICATE KEY UPDATE
+			barang_masuk  = VALUES(barang_masuk),
+			barang_keluar = VALUES(barang_keluar)
+	`).Error
+	if err != nil {
+		fmt.Println("Refresh stock movement summary error:", err)
+	}
+}
+
+// RefreshStockHistorySummary pre-computes total qty, value & count for stock-in/out history.
+// Avoids scanning all rows on every API request — reads from this table in <1ms.
+func RefreshStockHistorySummary() {
+	// Stock out: group by (kode_brng, no_faktur) to avoid row multiplication,
+	// then apply price CASE per group.
+	err := SIK.Exec(`
+		INSERT INTO stock_history_summary (id, total_qty_out, total_value_out)
+		SELECT 1,
+			COALESCE(SUM(t.total_keluar), 0),
+			COALESCE(SUM(t.total_keluar * CASE
+				WHEN t.no_faktur = 'Apotek' THEN COALESCE(NULLIF(databarang.beliluar, 0), NULLIF(databarang.ralan, 0), NULLIF(databarang.jualbebas, 0), databarang.utama, 0)
+				WHEN t.no_faktur = 'Utama (BPJS)' THEN COALESCE(NULLIF(databarang.utama, 0), NULLIF(databarang.ralan, 0), NULLIF(databarang.jualbebas, 0), databarang.beliluar, 0)
+				ELSE COALESCE(NULLIF(databarang.ralan, 0), NULLIF(databarang.jualbebas, 0), NULLIF(databarang.beliluar, 0), databarang.utama, 0)
+			END), 0)
+		FROM (
+			SELECT r.kode_brng, r.no_faktur, SUM(r.keluar) AS total_keluar
+			FROM riwayat_barang_medis r
+			WHERE r.kd_bangsal = 'AP' AND r.keluar > 0
+			GROUP BY r.kode_brng, r.no_faktur
+		) AS t
+		LEFT JOIN databarang ON t.kode_brng = databarang.kode_brng
+		ON DUPLICATE KEY UPDATE
+			total_qty_out = VALUES(total_qty_out),
+			total_value_out = VALUES(total_value_out)
+	`).Error
+	if err != nil {
+		fmt.Println("Refresh stock history summary (out) error:", err)
+	}
+
+	// Stock out count (number of rows, not groups)
+	err = SIK.Exec(`
+		INSERT INTO stock_history_summary (id, total_count_out)
+		SELECT 1, COUNT(*)
+		FROM riwayat_barang_medis
+		WHERE kd_bangsal = 'AP' AND keluar > 0
+		ON DUPLICATE KEY UPDATE
+			total_count_out = VALUES(total_count_out)
+	`).Error
+	if err != nil {
+		fmt.Println("Refresh stock history summary (out count) error:", err)
+	}
+
+	// Stock in: group by kode_brng, then apply h_beli.
+	err = SIK.Exec(`
+		INSERT INTO stock_history_summary (id, total_qty_in, total_value_in)
+		SELECT 1,
+			COALESCE(SUM(t.total_masuk), 0),
+			COALESCE(SUM(t.total_masuk * COALESCE(databarang.h_beli, 0)), 0)
+		FROM (
+			SELECT r.kode_brng, SUM(r.masuk) AS total_masuk
+			FROM riwayat_barang_medis r
+			WHERE r.kd_bangsal = 'AP' AND r.masuk > 0
+			GROUP BY r.kode_brng
+		) AS t
+		LEFT JOIN databarang ON t.kode_brng = databarang.kode_brng
+		ON DUPLICATE KEY UPDATE
+			total_qty_in = VALUES(total_qty_in),
+			total_value_in = VALUES(total_value_in)
+	`).Error
+	if err != nil {
+		fmt.Println("Refresh stock history summary (in) error:", err)
+	}
+
+	// Stock in count (number of rows, not groups)
+	err = SIK.Exec(`
+		INSERT INTO stock_history_summary (id, total_count_in)
+		SELECT 1, COUNT(*)
+		FROM riwayat_barang_medis
+		WHERE kd_bangsal = 'AP' AND masuk > 0
+		ON DUPLICATE KEY UPDATE
+			total_count_in = VALUES(total_count_in)
+	`).Error
+	if err != nil {
+		fmt.Println("Refresh stock history summary (in count) error:", err)
+	}
 }
 
 func ensureIndex(tableName string, indexName string, createSQL string) {

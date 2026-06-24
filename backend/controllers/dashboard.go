@@ -182,14 +182,12 @@ func GetDashboard(c *gin.Context) {
 		defer wg.Done()
 		e := config.SIK.Raw(`
 			SELECT
-				DATE_FORMAT(tanggal, '%Y-%m') AS month,
-				SUM(masuk)  AS barang_masuk,
-				SUM(keluar) AS barang_keluar
-			FROM riwayat_barang_medis
+				month,
+				barang_masuk,
+				barang_keluar
+			FROM dashboard_stock_movement
 			WHERE kd_bangsal = 'AP'
-				AND tanggal >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 5 MONTH), '%Y-%m-01')
-				AND tanggal <  DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 1 MONTH), '%Y-%m-01')
-			GROUP BY DATE_FORMAT(tanggal, '%Y-%m')
+				AND month >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 5 MONTH), '%Y-%m')
 			ORDER BY month ASC
 		`).Scan(&stockMovement).Error
 		captureErr(e)
