@@ -380,7 +380,7 @@ func AddStockOut(c *gin.Context) {
 		"masuk":      0,
 		"keluar":     payload.Qty,
 		"stok_akhir": stokAkhir,
-		"posisi":     "Barang Keluar",
+		"posisi":     "Pemberian Obat",
 		"tanggal":    now.Format("2006-01-02"),
 		"jam":        now.Format("15:04:05"),
 		"petugas":    "Admin Utama",

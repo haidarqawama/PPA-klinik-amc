@@ -288,7 +288,7 @@ export default function StockOut() {
                   >
                     <p className="font-medium text-sm text-foreground">{item.nama_brng}</p>
                     <p className="text-xs text-muted-foreground">
-                      {item.kode_brng} {item.barcode ? `- ${item.barcode}` : ""} - Stok {Number(item.stok).toLocaleString("id-ID")} {item.satuan || "unit"}
+                      {item.kode_brng} - Stok {Number(item.stok).toLocaleString("id-ID")} {item.satuan || "unit"}
                     </p>
                   </button>
                 ))}
@@ -327,7 +327,7 @@ export default function StockOut() {
                     <option value="">Pilih batch</option>
                     {batches.map((batch) => (
                       <option key={getBatchValue(batch)} value={getBatchValue(batch)}>
-                        {batch.no_batch} - {batch.no_faktur || "tanpa faktur"}
+                        {batch.no_batch} - {batch.no_faktur || "Tanpa Batch & Faktur"}
                       </option>
                     ))}
                   </select>

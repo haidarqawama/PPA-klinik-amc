@@ -3,6 +3,8 @@ services:
   mysql:
     image: mysql:8.0
     container_name: mysql
+    profiles:
+      - local
 
     environment:
       MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
@@ -19,13 +21,18 @@ services:
       retries: 20
       start_period: 120s
 
+    ports:
+      - "3306:3306"
+
   backend:
     build: ./backend
     container_name: ppa-backend
 
-    depends_on:
-      mysql:
-        condition: service_healthy
+    env_file:
+      - ./backend/.env
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
     ports:
       - "8080:8080"
@@ -39,6 +46,22 @@ services:
 
     ports:
       - "3000:3000"
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: ppa-phpmyadmin
+    profiles:
+      - local
+
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_USER: root
+      PMA_PASSWORD: ''
+    ports:
+      - "8081:80"
+    depends_on:
+      - mysql
 
 volumes:
   mysql_data:

@@ -384,7 +384,7 @@ func AddStockIn(c *gin.Context) {
 		"masuk":      payload.Qty,
 		"keluar":     0,
 		"stok_akhir": stokAkhir,
-		"posisi":     "Barang Masuk",
+		"posisi":     "Penerimaan",
 		"tanggal":    now.Format("2006-01-02"),
 		"jam":        now.Format("15:04:05"),
 		"petugas":    "Admin Utama",
@@ -461,9 +461,15 @@ func AddStockIn(c *gin.Context) {
 
 	// Insert barcode if provided
 	if payload.Barcode != "" {
-		var existingBarcode models.BarcodeItem
-		result := tx.Where("kode_brng = ? AND no_batch = ? AND no_faktur = ?",
-			payload.KodeBrng, payload.NoBatch, payload.NoFaktur).First(&existingBarcode)
+		var count int64
+		if err := tx.Model(&models.BarcodeItem{}).
+			Where("kode_brng = ? AND no_batch = ? AND no_faktur = ?",
+				payload.KodeBrng, payload.NoBatch, payload.NoFaktur).
+			Count(&count).Error; err != nil {
+			tx.Rollback()
+			c.JSON(500, gin.H{"error": "Gagal mengecek barcode", "detail": err.Error()})
+			return
+		}
 
 		barcodeItem := models.BarcodeItem{
 			KodeBrng: payload.KodeBrng,
@@ -472,12 +478,23 @@ func AddStockIn(c *gin.Context) {
 			Barcode:  payload.Barcode,
 		}
 
-		if result.Error == nil {
-			// Barcode exists for this batch, update it
-			tx.Model(&existingBarcode).Update("barcode", payload.Barcode)
+		if count > 0 {
+			// Update barcode yang sudah ada
+			if err := tx.Model(&models.BarcodeItem{}).
+				Where("kode_brng = ? AND no_batch = ? AND no_faktur = ?",
+					payload.KodeBrng, payload.NoBatch, payload.NoFaktur).
+				Update("barcode", payload.Barcode).Error; err != nil {
+				tx.Rollback()
+				c.JSON(500, gin.H{"error": "Gagal update barcode", "detail": err.Error()})
+				return
+			}
 		} else {
-			// No barcode for this batch, insert new
-			tx.Create(&barcodeItem)
+			// Insert barcode baru
+			if err := tx.Create(&barcodeItem).Error; err != nil {
+				tx.Rollback()
+				c.JSON(500, gin.H{"error": "Gagal menyimpan barcode", "detail": err.Error()})
+				return
+			}
 		}
 	}
 

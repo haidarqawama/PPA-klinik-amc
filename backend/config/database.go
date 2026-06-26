@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/joho/godotenv"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -18,8 +19,14 @@ func ConnectDatabase() {
 
 	var err error
 
+	// Load .env file
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found or error loading .env")
+	}
+
 	// =========================
-	// CONNECT DATABASE SIK (with retry)
+	// SMART DATABASE CONNECTION
+	// Try local first, fallback to remote
 	// =========================
 
 	maxRetries := 90
@@ -33,23 +40,108 @@ func ConnectDatabase() {
 		},
 	)
 
-	for i := 0; i < maxRetries; i++ {
-		SIK, err = gorm.Open(
-			mysql.Open("root:@tcp(mysql:3306)/sik"),
-			&gorm.Config{
-				Logger: gormLogger,
-			},
-		)
-		if err == nil {
+	// Local database config
+	localHost := os.Getenv("LOCAL_DB_HOST")
+	if localHost == "" {
+		localHost = "127.0.0.1"
+	}
+	localPort := os.Getenv("LOCAL_DB_PORT")
+	if localPort == "" {
+		localPort = "3306"
+	}
+	localUser := os.Getenv("LOCAL_DB_USER")
+	if localUser == "" {
+		localUser = "root"
+	}
+	localPass := os.Getenv("LOCAL_DB_PASSWORD")
+	localDB := os.Getenv("LOCAL_DB_NAME")
+	if localDB == "" {
+		localDB = "sik"
+	}
+
+	// Remote database config
+	remoteHost := os.Getenv("REMOTE_DB_HOST")
+	if remoteHost == "" {
+		remoteHost = "100.72.136.112"
+	}
+	remotePort := os.Getenv("REMOTE_DB_PORT")
+	if remotePort == "" {
+		remotePort = "3306"
+	}
+	remoteUser := os.Getenv("REMOTE_DB_USER")
+	if remoteUser == "" {
+		remoteUser = "root"
+	}
+	remotePass := os.Getenv("REMOTE_DB_PASSWORD")
+	remoteDB := os.Getenv("REMOTE_DB_NAME")
+	if remoteDB == "" {
+		remoteDB = "sik"
+	}
+
+	// Try remote database (from .env)
+	remoteDSN := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true",
+		remoteUser,
+		remotePass,
+		remoteHost,
+		remotePort,
+		remoteDB,
+	)
+
+	// Try local database first
+	// In Docker: use host.docker.internal to access host machine
+	// In local run: use 127.0.0.1
+	localHosts := []string{localHost, "127.0.0.1"}
+	localConnected := false
+
+	fmt.Println("Attempting to connect to local database...")
+
+	// Try each local host
+	for _, lh := range localHosts {
+		if localConnected {
 			break
 		}
-		fmt.Printf("Waiting for database... attempt %d/%d\n", i+1, maxRetries)
+
+		localDSN := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true",
+			localUser,
+			localPass,
+			lh,
+			localPort,
+			localDB,
+		)
+
+		for i := 0; i < 3; i++ {
+			SIK, err = gorm.Open(mysql.Open(localDSN), &gorm.Config{Logger: gormLogger})
+			if err == nil {
+				fmt.Printf("✅ Connected to LOCAL database (XAMPP) via %s\n", localHost)
+				localConnected = true
+				goto DatabaseConnected
+			}
+			fmt.Printf("Local database not available at %s, attempt %d/3 - Error: %v\n", localHost, i+1, err)
+			time.Sleep(1 * time.Second)
+		}
+	}
+
+	// Fallback to remote database
+	fmt.Printf("\n🌐 Local database unavailable, connecting to REMOTE database (%s)...\n", remoteHost)
+
+	for i := 0; i < maxRetries; i++ {
+		SIK, err = gorm.Open(mysql.Open(remoteDSN), &gorm.Config{Logger: gormLogger})
+		if err == nil {
+			fmt.Printf("✅ Connected to REMOTE database (%s via Tailscale)\n", remoteHost)
+			goto DatabaseConnected
+		}
+		fmt.Printf("Waiting for remote database... attempt %d/%d\n", i+1, maxRetries)
 		time.Sleep(retryInterval)
 	}
 
 	if err != nil {
-		panic(fmt.Sprintf("Failed to connect to database after %d attempts: %v", maxRetries, err))
+		panic(fmt.Sprintf(
+			"Failed to connect to database (both local and remote failed): %v",
+			err,
+		))
 	}
+
+DatabaseConnected:
 
 	// =========================
 	// AUTO CREATE TABLE BARCODE

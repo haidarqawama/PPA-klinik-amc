@@ -222,7 +222,7 @@ export default function StockIn() {
                   >
                     <p className="font-medium text-sm text-foreground">{item.nama_brng}</p>
                     <p className="text-xs text-muted-foreground">
-                      {item.kode_brng} {item.barcode ? `- ${item.barcode}` : ""} - Stok {Number(item.stok).toLocaleString("id-ID")} {item.satuan || "unit"}
+                      {item.kode_brng} - Stok {Number(item.stok).toLocaleString("id-ID")} {item.satuan || "unit"}
                     </p>
                   </button>
                 ))}
