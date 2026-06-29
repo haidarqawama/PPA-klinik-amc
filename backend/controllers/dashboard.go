@@ -185,9 +185,17 @@ func GetDashboard(c *gin.Context) {
 				month,
 				barang_masuk,
 				barang_keluar
-			FROM dashboard_stock_movement
-			WHERE kd_bangsal = 'AP'
-				AND month >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 5 MONTH), '%Y-%m')
+			FROM (
+				SELECT
+					month,
+					barang_masuk,
+					barang_keluar
+				FROM dashboard_stock_movement
+				WHERE kd_bangsal = 'AP'
+					AND month <= DATE_FORMAT(CURDATE(), '%Y-%m')
+				ORDER BY month DESC
+				LIMIT 5
+			) AS recent_months
 			ORDER BY month ASC
 		`).Scan(&stockMovement).Error
 		captureErr(e)

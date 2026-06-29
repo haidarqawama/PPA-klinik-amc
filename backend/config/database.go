@@ -212,6 +212,13 @@ DatabaseConnected:
 		"CREATE INDEX idx_rbm_stock_movement ON riwayat_barang_medis (kd_bangsal, tanggal, masuk, keluar)",
 	)
 
+	// Covering index for the stock-in history sub-query.
+	ensureIndex(
+		"riwayat_barang_medis",
+		"idx_rbm_stockin_history",
+		"CREATE INDEX idx_rbm_stockin_history ON riwayat_barang_medis (kd_bangsal, masuk, tanggal, jam, kode_brng, no_batch, no_faktur)",
+	)
+
 	ensureIndex(
 		"barcode_obat",
 		"idx_barcode_obat_lookup",

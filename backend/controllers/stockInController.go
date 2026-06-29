@@ -160,7 +160,7 @@ func GetStockInHistory(c *gin.Context) {
 		COALESCE(kodesatuan.satuan, databarang.kode_sat, '') AS unit,
 		COALESCE(databarang.h_beli, 0) AS buy_price,
 		COALESCE(r.masuk, 0) * COALESCE(databarang.h_beli, 0) AS total_cost,
-		COALESCE(DATE_FORMAT(databarang.expire, '%Y-%m-%d'), '') AS expired,
+		COALESCE(DATE_FORMAT(batch_dates.tgl_kadaluarsa, '%Y-%m-%d'), DATE_FORMAT(databarang.expire, '%Y-%m-%d'), '') AS expired,
 		COALESCE(DATE_FORMAT(r.tanggal, '%Y-%m-%d'), '') AS date,
 		IFNULL(TIME_FORMAT(r.jam, '%H:%i:%s'), '') AS time,
 		COALESCE(industrifarmasi.nama_industri, '') AS supplier,
@@ -170,6 +170,14 @@ func GetStockInHistory(c *gin.Context) {
 	joins := `
 		LEFT JOIN databarang ON r.kode_brng = databarang.kode_brng
 		LEFT JOIN barcode_obat ON r.kode_brng = barcode_obat.kode_brng AND COALESCE(r.no_batch, '') = barcode_obat.no_batch AND COALESCE(r.no_faktur, '') = barcode_obat.no_faktur
+		LEFT JOIN (
+			SELECT kode_brng, no_batch, no_faktur, MIN(tgl_kadaluarsa) AS tgl_kadaluarsa
+			FROM data_batch
+			GROUP BY kode_brng, no_batch, no_faktur
+		) batch_dates
+			ON r.kode_brng = batch_dates.kode_brng
+			AND COALESCE(r.no_batch, '') = COALESCE(batch_dates.no_batch, '')
+			AND COALESCE(r.no_faktur, '') = COALESCE(batch_dates.no_faktur, '')
 		LEFT JOIN kodesatuan ON databarang.kode_sat = kodesatuan.kode_sat
 		LEFT JOIN industrifarmasi ON databarang.kode_industri = industrifarmasi.kode_industri`
 
@@ -362,10 +370,6 @@ func AddStockIn(c *gin.Context) {
 
 	if payload.Price > 0 {
 		tx.Table("databarang").Where("kode_brng = ?", payload.KodeBrng).Updates(map[string]interface{}{"h_beli": payload.Price, "dasar": payload.Price})
-	}
-
-	if payload.Expired != "" {
-		tx.Table("databarang").Where("kode_brng = ?", payload.KodeBrng).Update("expire", payload.Expired)
 	}
 
 	var prices models.ItemPriceSnapshot
