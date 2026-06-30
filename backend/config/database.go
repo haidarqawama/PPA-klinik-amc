@@ -262,6 +262,7 @@ DatabaseConnected:
 	// Initial refresh
 	RefreshStockMovementSummary()
 	RefreshStockHistorySummary()
+	SeedBatchNumbers()
 
 	fmt.Println("Database connected")
 
@@ -399,4 +400,117 @@ func ensureIndex(tableName string, indexName string, createSQL string) {
 	if err := SIK.Exec(createSQL).Error; err != nil {
 		fmt.Println("Create index error:", err)
 	}
+}
+
+// SeedBatchNumbers generates no_batch and no_faktur for items in gudangbarang
+// that don't have them yet, and inserts corresponding entries into data_batch.
+// It only runs once – if all items already have batch numbers it skips.
+func SeedBatchNumbers() {
+	var count int64
+	SIK.Raw(`
+		SELECT COUNT(*)
+		FROM gudangbarang g
+		JOIN databarang d ON g.kode_brng = d.kode_brng
+		WHERE g.kd_bangsal = 'AP'
+		  AND g.stok > 0
+		  AND (g.no_batch IS NULL OR g.no_batch = '')
+	`).Scan(&count)
+
+	if count == 0 {
+		fmt.Println("✅ SeedBatchNumbers: semua barang sudah memiliki no_batch")
+		return
+	}
+
+	fmt.Printf("⚙️  SeedBatchNumbers: %d barang tanpa batch, generating...\n", count)
+
+	var maxBTC int
+	SIK.Raw("SELECT COALESCE(MAX(CAST(SUBSTRING(no_batch,4) AS UNSIGNED)), 0) FROM gudangbarang WHERE no_batch REGEXP '^BTC[0-9]+$'").Scan(&maxBTC)
+
+	today := time.Now().Format("0201")
+	var maxPMF int
+	SIK.Raw("SELECT COALESCE(MAX(CAST(SUBSTRING(no_faktur,10) AS UNSIGNED)), 0) FROM gudangbarang WHERE no_faktur LIKE ?", "PMF"+today+"-%").Scan(&maxPMF)
+
+	type itemToBatch struct {
+		KodeBrng  string  `gorm:"column:kode_brng"`
+		KdBangsal string  `gorm:"column:kd_bangsal"`
+		Stok      float64 `gorm:"column:stok"`
+	}
+	var items []itemToBatch
+	SIK.Raw(`
+		SELECT g.kode_brng, g.kd_bangsal, g.stok
+		FROM gudangbarang g
+		JOIN databarang d ON g.kode_brng = d.kode_brng
+		WHERE g.kd_bangsal = 'AP' AND g.stok > 0
+		  AND (g.no_batch IS NULL OR g.no_batch = '')
+		ORDER BY g.kode_brng
+	`).Scan(&items)
+
+	tx := SIK.Begin()
+	if tx.Error != nil {
+		fmt.Println("❌ SeedBatchNumbers: gagal memulai transaksi:", tx.Error)
+		return
+	}
+
+	for i, item := range items {
+		batchNo := fmt.Sprintf("BTC%06d", maxBTC+i+1)
+		fakturNo := fmt.Sprintf("PMF%s-%04d", today, maxPMF+i+1)
+
+		// Update satu baris gudangbarang per iterasi (LIMIT 1) agar tiap baris
+		// dapat no_batch berbeda meskipun kode_brng-nya sama.
+		tx.Exec("UPDATE gudangbarang SET no_batch = ?, no_faktur = ? WHERE kode_brng = ? AND kd_bangsal = ? AND (no_batch IS NULL OR no_batch = '') LIMIT 1",
+			batchNo, fakturNo, item.KodeBrng, item.KdBangsal)
+
+		tx.Exec("UPDATE riwayat_barang_medis SET no_batch = ?, no_faktur = ? WHERE kode_brng = ? AND (no_batch IS NULL OR no_batch = '') LIMIT 1",
+			batchNo, fakturNo, item.KodeBrng)
+	}
+
+	var dataBatchExists int64
+	SIK.Raw("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'data_batch'").Scan(&dataBatchExists)
+
+	if dataBatchExists == 0 {
+		fmt.Println("⚠️  SeedBatchNumbers: tabel data_batch belum ada, skip insert ke data_batch")
+		if err := tx.Commit().Error; err != nil {
+			tx.Rollback()
+			fmt.Println("❌ SeedBatchNumbers: gagal commit:", err)
+			return
+		}
+		fmt.Printf("✅ SeedBatchNumbers: berhasil generate batch untuk %d barang (data_batch tidak tersedia)", len(items))
+		return
+	}
+
+	err := tx.Exec(`
+		INSERT IGNORE INTO data_batch (
+			no_batch, kode_brng, tgl_beli, tgl_kadaluarsa, asal, no_faktur,
+			dasar, h_beli, ralan, kelas1, kelas2, kelas3, utama, vip, vvip,
+			beliluar, jualbebas, karyawan, jumlahbeli, sisa
+		)
+		SELECT
+			g.no_batch, g.kode_brng,
+			CURDATE(),
+			COALESCE(NULLIF(d.expire, ''), NULLIF(d.expire, '0000-00-00'), '0000-00-00'),
+			'Penerimaan',
+			g.no_faktur,
+			COALESCE(d.dasar, 0), COALESCE(d.h_beli, 0),
+			COALESCE(d.ralan, 0), COALESCE(d.kelas1, 0), COALESCE(d.kelas2, 0), COALESCE(d.kelas3, 0),
+			COALESCE(d.utama, 0), COALESCE(d.vip, 0), COALESCE(d.vvip, 0),
+			COALESCE(d.beliluar, 0), COALESCE(d.jualbebas, 0), COALESCE(d.karyawan, 0),
+			ROUND(SUM(g.stok), 2), ROUND(SUM(g.stok), 2)
+		FROM gudangbarang g
+		LEFT JOIN databarang d ON g.kode_brng = d.kode_brng
+		WHERE g.kd_bangsal = 'AP' AND g.stok > 0 AND g.no_batch != ''
+		GROUP BY g.kode_brng, g.no_batch, g.no_faktur
+	`).Error
+	if err != nil {
+		tx.Rollback()
+		fmt.Println("❌ SeedBatchNumbers: gagal insert data_batch:", err)
+		return
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
+		fmt.Println("❌ SeedBatchNumbers: gagal commit:", err)
+		return
+	}
+
+	fmt.Printf("✅ SeedBatchNumbers: berhasil generate batch untuk %d barang\n", len(items))
 }
