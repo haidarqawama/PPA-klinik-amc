@@ -343,26 +343,22 @@ export default function MasterData() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full table-fixed">
-          <colgroup>
-            <col style={{ width: "220px" }} />
-            <col />
-            <col style={{ width: "120px" }} />
-          </colgroup>
-          <thead className="bg-muted/30 border-b border-border">
-            <tr>
-              <th className="w-[200px] px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                {activeConfig.codeLabel}
-              </th>
-              <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                {activeConfig.nameLabel}
-              </th>
-              <th className="w-[120px] px-6 py-4 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Aksi
-              </th>
-            </tr>
-          </thead>
+        {/* Desktop table */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-muted/30 border-b border-border">
+              <tr>
+                <th className="w-[200px] px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  {activeConfig.codeLabel}
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  {activeConfig.nameLabel}
+                </th>
+                <th className="w-[120px] px-6 py-4 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Aksi
+                </th>
+              </tr>
+            </thead>
             <tbody className="divide-y divide-border">
               {loading ? (
                 <tr>
@@ -384,7 +380,7 @@ export default function MasterData() {
                         {record.code}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <span className="text-sm text-foreground">
                         {record.name}
                       </span>
@@ -412,6 +408,52 @@ export default function MasterData() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile cards */}
+        <div className="md:hidden divide-y divide-border">
+          {loading ? (
+            <div className="px-6 py-14 text-center text-muted-foreground">
+              Memuat master data...
+            </div>
+          ) : filteredRecords.length === 0 ? (
+            <div className="px-6 py-14 text-center text-muted-foreground">
+              Data tidak ditemukan
+            </div>
+          ) : (
+            filteredRecords.map((record) => (
+              <div key={record.code} className="p-4 space-y-3">
+                <div className="flex items-start justify-between">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs text-muted-foreground">{activeConfig.codeLabel}</p>
+                    <p className="font-mono text-sm font-medium text-foreground truncate">
+                      {record.code}
+                    </p>
+                  </div>
+                  <div className="flex gap-2 shrink-0 ml-3">
+                    <button
+                      onClick={() => openEdit(record)}
+                      className="p-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                      title="Edit"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setDeleteRecord(record)}
+                      className="p-2 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
+                      title="Hapus"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{activeConfig.nameLabel}</p>
+                  <p className="text-sm text-foreground">{record.name}</p>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
@@ -512,3 +554,4 @@ export default function MasterData() {
     </div>
   );
 }
+

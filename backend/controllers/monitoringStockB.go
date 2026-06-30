@@ -4,6 +4,7 @@ import (
 	"backend/config"
 	"backend/models"
 	"math"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -199,7 +200,7 @@ func GetMonitoringStock(c *gin.Context) {
 			ON databarang.kode_golongan = golongan_barang.kode
 		LEFT JOIN kodesatuan
 			ON databarang.kode_sat = kodesatuan.kode_sat
-		WHERE COALESCE(gudang_stok.total_stok, 0) < ?
+		WHERE COALESCE(gudang_stok.total_stok, 0) > 0 AND COALESCE(gudang_stok.total_stok, 0) < ?
 		ORDER BY COALESCE(gudang_stok.total_stok, 0) ASC
 		LIMIT 50
 	`, criticalStockThreshold, restockStockThreshold).Scan(&lowStockItems).Error; err != nil {
@@ -418,7 +419,7 @@ func GetMonitoringStockDetails(c *gin.Context) {
 				ON databarang.kode_golongan = golongan_barang.kode
 			LEFT JOIN kodesatuan
 				ON databarang.kode_sat = kodesatuan.kode_sat
-			WHERE COALESCE(gudang_stok.total_stok, 0) < ?
+			WHERE COALESCE(gudang_stok.total_stok, 0) > 0 AND COALESCE(gudang_stok.total_stok, 0) < ?
 		`
 		var args []interface{}
 		args = append(args, criticalStockThreshold)
@@ -452,7 +453,7 @@ func GetMonitoringStockDetails(c *gin.Context) {
 				ON databarang.kode_golongan = golongan_barang.kode
 			LEFT JOIN kodesatuan
 				ON databarang.kode_sat = kodesatuan.kode_sat
-			WHERE COALESCE(gudang_stok.total_stok, 0) >= ? AND COALESCE(gudang_stok.total_stok, 0) < ?
+			WHERE COALESCE(gudang_stok.total_stok, 0) > 0 AND COALESCE(gudang_stok.total_stok, 0) >= ? AND COALESCE(gudang_stok.total_stok, 0) < ?
 		`
 		var args []interface{}
 		args = append(args, criticalStockThreshold, restockStockThreshold)
@@ -500,6 +501,43 @@ func GetMonitoringStockDetails(c *gin.Context) {
 		}
 		c.JSON(200, gin.H{"data": items})
 
+		case "all_low":
+		var allItems []models.MonitoringStockLowItem
+		queryStr := `
+			SELECT
+				databarang.kode_brng,
+				databarang.nama_brng,
+				COALESCE(gudang_stok.total_stok, 0) AS stok,
+				COALESCE(golongan_barang.nama, 'Tidak Diketahui') AS golongan,
+				CASE
+					WHEN COALESCE(gudang_stok.total_stok, 0) < ` + strconv.Itoa(criticalStockThreshold) + ` THEN 'critical'
+					ELSE 'warning'
+				END AS status,
+				COALESCE(kodesatuan.satuan, '-') AS satuan
+			FROM databarang
+			` + gudangAPStockJoin + `
+			LEFT JOIN golongan_barang
+				ON databarang.kode_golongan = golongan_barang.kode
+			LEFT JOIN kodesatuan
+				ON databarang.kode_sat = kodesatuan.kode_sat
+			WHERE COALESCE(gudang_stok.total_stok, 0) > 0 AND COALESCE(gudang_stok.total_stok, 0) < ?
+		`
+		var args []interface{}
+		args = append(args, restockStockThreshold)
+
+		if search != "" {
+			queryStr += " AND (LOWER(databarang.nama_brng) LIKE ? OR LOWER(databarang.kode_brng) LIKE ?)"
+			args = append(args, "%"+search+"%", "%"+search+"%")
+		}
+
+		queryStr += " ORDER BY COALESCE(gudang_stok.total_stok, 0) ASC"
+
+		if err := db.Raw(queryStr, args...).Scan(&allItems).Error; err != nil {
+			c.JSON(500, gin.H{"error": "Gagal mengambil data barang hampir habis", "detail": err.Error()})
+			return
+		}
+		c.JSON(200, gin.H{"data": allItems})
+
 	case "expired":
 		var items []models.MonitoringStockExpiringItem
 		queryStr := `
@@ -530,6 +568,6 @@ func GetMonitoringStockDetails(c *gin.Context) {
 		c.JSON(200, gin.H{"data": items})
 
 	default:
-		c.JSON(400, gin.H{"error": "Parameter type tidak valid. Harus 'critical', 'restock', 'expiring_soon', atau 'expired'"})
+		c.JSON(400, gin.H{"error": "Parameter type tidak valid. Harus 'critical', 'restock', 'expiring_soon', 'all_low', atau 'expired'"})
 	}
 }

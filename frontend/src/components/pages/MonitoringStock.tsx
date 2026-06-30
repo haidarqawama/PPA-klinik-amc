@@ -95,13 +95,13 @@ export default function MonitoringStock() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const [activeDetailType, setActiveDetailType] = useState<"critical" | "restock" | "expiring_soon" | "expired" | null>(null);
+  const [activeDetailType, setActiveDetailType] = useState<"critical" | "restock" | "expiring_soon" | "expired" | "all_low" | null>(null);
   const [detailItems, setDetailItems] = useState<any[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailSearchQuery, setDetailSearchQuery] = useState("");
   const [detailCurrentPage, setDetailCurrentPage] = useState(1);
 
-  const openDetailModal = async (type: "critical" | "restock" | "expiring_soon" | "expired") => {
+  const openDetailModal = async (type: "critical" | "restock" | "expiring_soon" | "expired" | "all_low") => {
     setActiveDetailType(type);
     setDetailLoading(true);
     setDetailSearchQuery("");
@@ -112,7 +112,7 @@ export default function MonitoringStock() {
         throw new Error("Gagal mengambil data detail");
       }
       const body = await response.json();
-      setDetailItems(body.data || []);
+      setDetailItems((body.data || []).filter((item: any) => (type === 'critical' || type === 'restock') ? item.stok > 0 : true));
     } catch (err) {
       console.error(err);
     } finally {
@@ -221,10 +221,11 @@ export default function MonitoringStock() {
   };
   const lowStockItems = data?.low_stock_items ?? [];
   const expiringItems = data?.expiring_items ?? [];
-  const visibleLowStockItems = lowStockItems.slice(0, LIST_PREVIEW_LIMIT);
+  const displayLowStockItems = lowStockItems.filter(item => item.stok > 0);
+  const visibleLowStockItems = displayLowStockItems.slice(0, LIST_PREVIEW_LIMIT);
   const visibleExpiringItems = expiringItems.slice(0, LIST_PREVIEW_LIMIT);
-  const turnoverItems = data?.turnover_items ?? [];
-  const coverageItems = data?.coverage_items ?? [];
+  const turnoverItems = (data?.turnover_items ?? []).filter(item => item.persediaan_akhir > 0);
+  const coverageItems = (data?.coverage_items ?? []).filter(item => item.stok_saat_ini > 0);
   const golonganStats = data?.golongan_stats ?? [];
   const golonganValues = data?.golongan_values ?? [];
   const observationPeriod = data?.observation_period ?? "30 hari terakhir";
@@ -467,7 +468,7 @@ export default function MonitoringStock() {
           <h3 className="text-base font-semibold">Barang Hampir Habis</h3>
           <p className="text-sm text-muted-foreground">Stok kritis (&lt; 20) dan perlu restock (&lt; 50)</p>
         </div>
-        {lowStockItems.length === 0 ? (
+        {displayLowStockItems.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">Semua stok dalam kondisi aman</p>
         ) : (
           <>
@@ -514,11 +515,11 @@ export default function MonitoringStock() {
                 );
               })}
             </div>
-            {lowStockItems.length > LIST_PREVIEW_LIMIT && (
+            {displayLowStockItems.length > LIST_PREVIEW_LIMIT && (
               <div className="p-4 border-t border-border">
                 <button
                   type="button"
-                  onClick={() => openDetailModal("critical")}
+                  onClick={() => openDetailModal("all_low")}
                   className="w-full py-2.5 px-4 rounded-xl border border-border hover:bg-muted/50 transition-colors text-sm text-primary font-medium"
                 >
                   Lihat Semua Barang
@@ -664,9 +665,12 @@ export default function MonitoringStock() {
         } else if (activeDetailType === "expired") {
           modalTitle = "Daftar Barang Sudah Expired";
           countSuffix = "barang expired";
+        } else if (activeDetailType === "all_low") {
+          modalTitle = "Daftar Barang Hampir Habis (< 50)";
+          countSuffix = "barang hampir habis";
         }
 
-        const isStockType = activeDetailType === "critical" || activeDetailType === "restock";
+        const isStockType = activeDetailType === "critical" || activeDetailType === "restock" || activeDetailType === "all_low";
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
