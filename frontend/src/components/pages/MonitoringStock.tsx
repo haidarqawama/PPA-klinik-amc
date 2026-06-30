@@ -57,9 +57,9 @@ function formatCurrency(value: number): string {
 }
 
 function getTurnoverStatus(ratio: number): { label: string; className: string } {
-  if (ratio >= 0.5) return { label: "Cepat", className: "text-success" };
-  if (ratio >= 0.3) return { label: "Normal", className: "text-primary" };
-  return { label: "Lambat", className: "text-warning" };
+  if (ratio > 3) return { label: "Cepat", className: "text-success" };
+  if (ratio >= 1) return { label: "Lambat", className: "text-warning" };
+  return { label: "Sangat Lambat", className: "text-destructive" };
 }
 
 function getCoverageDisplay(status: MonitoringStockCoverage["status"]) {
