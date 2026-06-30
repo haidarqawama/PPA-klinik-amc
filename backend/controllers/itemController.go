@@ -200,7 +200,7 @@ func GetItems(c *gin.Context) {
 			AND gudang_inventory.no_faktur = barcode_barang.no_faktur
 		`)
 
-	query = query.Where("COALESCE(gudang_inventory.stok, 0) >= 0")
+	query = query.Where("COALESCE(gudang_inventory.stok, 0) > 0")
 
 	if search != "" {
 		query = query.Where(`
