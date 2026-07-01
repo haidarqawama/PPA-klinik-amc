@@ -19,6 +19,7 @@ import type {
 
 const MONITORING_REFRESH_MS = 30_000;
 const LIST_PREVIEW_LIMIT = 5;
+const OVERVIEW_PREVIEW_LIMIT = 7;
 
 const MONITORING_PERIODS: { value: MonitoringPeriod; label: string }[] = [
   { value: "day", label: "30 Hari" },
@@ -95,17 +96,24 @@ export default function MonitoringStock() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const [activeDetailType, setActiveDetailType] = useState<"critical" | "restock" | "expiring_soon" | "expired" | "all_low" | null>(null);
+  const [activeDetailType, setActiveDetailType] = useState<"critical" | "restock" | "expiring_soon" | "expired" | "all_low" | "turnover" | "coverage" | null>(null);
   const [detailItems, setDetailItems] = useState<any[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailSearchQuery, setDetailSearchQuery] = useState("");
   const [detailCurrentPage, setDetailCurrentPage] = useState(1);
 
-  const openDetailModal = async (type: "critical" | "restock" | "expiring_soon" | "expired" | "all_low") => {
+  const openDetailModal = async (type: "critical" | "restock" | "expiring_soon" | "expired" | "all_low" | "turnover" | "coverage", items?: any[]) => {
     setActiveDetailType(type);
-    setDetailLoading(true);
     setDetailSearchQuery("");
     setDetailCurrentPage(1);
+
+    if (items) {
+      setDetailItems(items);
+      setDetailLoading(false);
+      return;
+    }
+
+    setDetailLoading(true);
     try {
       const response = await fetch(apiUrl(`/api/monitoring-stock/details?type=${type}`), { cache: "no-store" });
       if (!response.ok) {
@@ -226,6 +234,8 @@ export default function MonitoringStock() {
   const visibleExpiringItems = expiringItems.slice(0, LIST_PREVIEW_LIMIT);
   const turnoverItems = (data?.turnover_items ?? []).filter(item => item.persediaan_akhir > 0);
   const coverageItems = (data?.coverage_items ?? []).filter(item => item.stok_saat_ini > 0);
+  const visibleTurnoverItems = turnoverItems.slice(0, OVERVIEW_PREVIEW_LIMIT);
+  const visibleCoverageItems = coverageItems.slice(0, OVERVIEW_PREVIEW_LIMIT);
   const golonganStats = data?.golongan_stats ?? [];
   const golonganValues = data?.golongan_values ?? [];
   const observationPeriod = data?.observation_period ?? "30 hari terakhir";
@@ -342,7 +352,7 @@ export default function MonitoringStock() {
             {turnoverItems.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">Belum ada data perputaran stok</p>
             ) : (
-              turnoverItems.map((item, index) => {
+              visibleTurnoverItems.map((item, index) => {
                 const turnoverStatus = getTurnoverStatus(item.turnover_ratio);
                 const color = TURNOVER_COLORS[index % TURNOVER_COLORS.length];
 
@@ -398,6 +408,17 @@ export default function MonitoringStock() {
               })
             )}
           </div>
+          {turnoverItems.length > OVERVIEW_PREVIEW_LIMIT && (
+            <div className="mt-4 border-t border-border pt-4">
+              <button
+                type="button"
+                onClick={() => openDetailModal("turnover", turnoverItems)}
+                className="w-full py-2.5 px-4 rounded-xl border border-border hover:bg-muted/50 transition-colors text-sm text-primary font-medium"
+              >
+                Lihat Semua Barang
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="bg-card rounded-2xl border border-border shadow-sm p-6">
@@ -411,7 +432,7 @@ export default function MonitoringStock() {
             {coverageItems.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">Belum ada data coverage stok</p>
             ) : (
-              coverageItems.map((item) => {
+              visibleCoverageItems.map((item) => {
                 const status = getCoverageDisplay(item.status);
                 const coveragePercentage = item.rata_rata_pemakaian_harian > 0
                   ? Math.min((item.coverage_days / 30) * 100, 100)
@@ -460,6 +481,17 @@ export default function MonitoringStock() {
               })
             )}
           </div>
+          {coverageItems.length > OVERVIEW_PREVIEW_LIMIT && (
+            <div className="mt-4 border-t border-border pt-4">
+              <button
+                type="button"
+                onClick={() => openDetailModal("coverage", coverageItems)}
+                className="w-full py-2.5 px-4 rounded-xl border border-border hover:bg-muted/50 transition-colors text-sm text-primary font-medium"
+              >
+                Lihat Semua Barang
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -668,9 +700,17 @@ export default function MonitoringStock() {
         } else if (activeDetailType === "all_low") {
           modalTitle = "Daftar Barang Hampir Habis (< 50)";
           countSuffix = "barang hampir habis";
+        } else if (activeDetailType === "turnover") {
+          modalTitle = "Daftar Inventory Turnover Ratio";
+          countSuffix = "barang turnover";
+        } else if (activeDetailType === "coverage") {
+          modalTitle = "Daftar Coverage Stok";
+          countSuffix = "barang coverage stok";
         }
 
         const isStockType = activeDetailType === "critical" || activeDetailType === "restock" || activeDetailType === "all_low";
+        const isTurnoverType = activeDetailType === "turnover";
+        const isCoverageType = activeDetailType === "coverage";
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -744,6 +784,24 @@ export default function MonitoringStock() {
                                 Stok Gudang AP
                               </th>
                             </>
+                          ) : isTurnoverType ? (
+                            <>
+                              <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                Turnover Ratio
+                              </th>
+                              <th className="px-6 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                Persediaan Akhir
+                              </th>
+                            </>
+                          ) : isCoverageType ? (
+                            <>
+                              <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                Coverage Hari
+                              </th>
+                              <th className="px-6 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                Stok Saat Ini
+                              </th>
+                            </>
                           ) : (
                             <>
                               <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -776,29 +834,67 @@ export default function MonitoringStock() {
                                 </td>
                               </tr>
                             );
-                          } else {
-                            const isExpired = activeDetailType === "expired" || item.days_left < 0;
+                          }
+
+                          if (isTurnoverType) {
                             return (
-                              <tr key={item.kode_brng + "-" + item.expire + idx} className="hover:bg-muted/10 transition-colors">
+                              <tr key={item.kode_brng + idx} className="hover:bg-muted/10 transition-colors">
                                 <td className="px-6 py-3.5 font-mono text-xs whitespace-nowrap text-muted-foreground">
                                   {item.kode_brng}
                                 </td>
                                 <td className="px-6 py-3.5 font-medium text-foreground">
                                   {item.nama_brng}
                                 </td>
-                                <td className="px-6 py-3.5 text-muted-foreground font-mono">
-                                  {formatDate(item.expire)}
+                                <td className="px-6 py-3.5 text-muted-foreground font-semibold">
+                                  {Number(item.turnover_ratio || 0).toFixed(2)}×
                                 </td>
-                                <td className={`px-6 py-3.5 text-right font-semibold ${isExpired ? "text-destructive" : "text-warning"}`}>
-                                  {isExpired ? (
-                                    <span>Expired ({Math.abs(item.days_left)} hari lalu)</span>
-                                  ) : (
-                                    <span>{item.days_left} hari lagi</span>
-                                  )}
+                                <td className="px-6 py-3.5 text-right font-semibold text-foreground">
+                                  {formatNumber(item.persediaan_akhir)} {item.satuan || 'unit'}
                                 </td>
                               </tr>
                             );
                           }
+
+                          if (isCoverageType) {
+                            return (
+                              <tr key={item.kode_brng + idx} className="hover:bg-muted/10 transition-colors">
+                                <td className="px-6 py-3.5 font-mono text-xs whitespace-nowrap text-muted-foreground">
+                                  {item.kode_brng}
+                                </td>
+                                <td className="px-6 py-3.5 font-medium text-foreground">
+                                  {item.nama_brng}
+                                </td>
+                                <td className="px-6 py-3.5 text-muted-foreground font-semibold">
+                                  {item.coverage_days ? `${formatNumber(item.coverage_days)} hari` : "—"}
+                                </td>
+                                <td className="px-6 py-3.5 text-right font-semibold text-foreground">
+                                  {formatNumber(item.stok_saat_ini)} {item.satuan || 'unit'}
+                                </td>
+                              </tr>
+                            );
+                          }
+
+                          const isExpired = activeDetailType === "expired" || item.days_left < 0;
+                          return (
+                            <tr key={item.kode_brng + "-" + item.expire + idx} className="hover:bg-muted/10 transition-colors">
+                              <td className="px-6 py-3.5 font-mono text-xs whitespace-nowrap text-muted-foreground">
+                                {item.kode_brng}
+                              </td>
+                              <td className="px-6 py-3.5 font-medium text-foreground">
+                                {item.nama_brng}
+                              </td>
+                              <td className="px-6 py-3.5 text-muted-foreground font-mono">
+                                {formatDate(item.expire)}
+                              </td>
+                              <td className={`px-6 py-3.5 text-right font-semibold ${isExpired ? "text-destructive" : "text-warning"}`}>
+                                {isExpired ? (
+                                  <span>Expired ({Math.abs(item.days_left)} hari lalu)</span>
+                                ) : (
+                                  <span>{item.days_left} hari lagi</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
                         })}
                       </tbody>
                     </table>
