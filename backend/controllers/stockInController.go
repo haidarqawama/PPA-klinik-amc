@@ -403,6 +403,12 @@ func AddStockIn(c *gin.Context) {
 		return
 	}
 
+	if err := config.AddStockHistorySummaryIn(tx, payload.KodeBrng, payload.Qty); err != nil {
+		tx.Rollback()
+		c.JSON(500, gin.H{"error": "Gagal memperbarui summary riwayat barang masuk", "detail": err.Error()})
+		return
+	}
+
 	// Insert into data_batch and barcode_obat only if batch info is provided
 	hasBatch := payload.NoBatch != "" || payload.NoFaktur != ""
 

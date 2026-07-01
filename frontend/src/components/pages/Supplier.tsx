@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Search, Plus, Edit, Trash2, Building2, X, Phone, MapPin, Map } from "lucide-react";
-import { useEffect } from "react";
 import { apiUrl } from "@/lib/api";
 
 interface Supplier {
-  kode_industri: any;
-  kode_supplier: any;
+  kode_industri: string;
+  kode_supplier: string;
   id: number;
   nama_industri: string;
   alamat: string;
@@ -26,11 +25,7 @@ export default function Supplier() {
   const [form, setForm] = useState(emptyForm);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
 
-  useEffect(() => {
-    fetchSuppliers();
-  }, []);
-  
-  const fetchSuppliers = async () => {
+  async function fetchSuppliers() {
   
     try {
   
@@ -49,7 +44,11 @@ export default function Supplier() {
   
     }
   
-  };
+  }
+
+  useEffect(() => {
+    void Promise.resolve().then(fetchSuppliers);
+  }, []);
 
   const filtered = suppliers.filter(
     (s) =>
@@ -214,7 +213,7 @@ export default function Supplier() {
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto">
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead className="bg-muted/30 border-b border-border">
               <tr>
@@ -311,13 +310,83 @@ export default function Supplier() {
           </table>
         </div>
 
+        {/* Mobile cards */}
+        <div className="md:hidden divide-y divide-border">
+          {paginated.length === 0 ? (
+            <div className="px-6 py-14 text-center">
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center">
+                  <Building2 className="w-8 h-8 text-muted-foreground" />
+                </div>
+                <p className="text-muted-foreground font-medium">Tidak ada supplier ditemukan</p>
+                <p className="text-sm text-muted-foreground">Coba ubah kata kunci pencarian</p>
+              </div>
+            </div>
+          ) : (
+            paginated.map((supplier, idx) => (
+              <div key={supplier.kode_supplier || supplier.kode_industri || idx} className="p-4 space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs text-muted-foreground">Kode Industri</p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                        <Building2 className="w-4 h-4 text-primary" />
+                      </div>
+                      <p className="font-mono text-sm font-medium text-foreground truncate">
+                        {supplier.kode_industri}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <button
+                      onClick={() => openEdit(supplier)}
+                      className="p-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                      title="Edit"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setDeleteConfirmId(supplier.id)}
+                      className="p-2 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
+                      title="Hapus"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground">Nama Industri</p>
+                  <p className="text-sm font-medium text-foreground break-words">{supplier.nama_industri}</p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 text-sm">
+                  <div className="flex items-start gap-2 text-muted-foreground">
+                    <MapPin className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span className="break-words">{supplier.alamat || "-"}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                      {supplier.kota || "-"}
+                    </span>
+                    <span className="inline-flex items-center gap-2 font-mono text-xs text-foreground">
+                      <Phone className="w-4 h-4 text-muted-foreground" />
+                      {supplier.no_telp || "-"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
         {/* Pagination */}
         <div className="px-6 py-4 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">
             Menampilkan {paginated.length > 0 ? (currentPage - 1) * ITEMS_PER_PAGE + 1 : 0}–
             {Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)} dari {filtered.length} supplier
           </p>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-center gap-2">
             <button
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={currentPage === 1}
@@ -480,3 +549,8 @@ export default function Supplier() {
     </div>
   );
 }
+
+
+
+
+

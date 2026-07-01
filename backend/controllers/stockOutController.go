@@ -395,6 +395,12 @@ func AddStockOut(c *gin.Context) {
 		return
 	}
 
+	if err := config.AddStockHistorySummaryOut(tx, payload.KodeBrng, payload.Destination, payload.Qty); err != nil {
+		tx.Rollback()
+		c.JSON(500, gin.H{"error": "Gagal memperbarui summary riwayat barang keluar", "detail": err.Error()})
+		return
+	}
+
 	if err := tx.Commit().Error; err != nil {
 		c.JSON(500, gin.H{"error": "Gagal menyimpan transaksi barang keluar", "detail": err.Error()})
 		return

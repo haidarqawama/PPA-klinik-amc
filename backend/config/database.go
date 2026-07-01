@@ -194,6 +194,14 @@ DatabaseConnected:
 		"CREATE INDEX idx_databarang_kode_golongan ON databarang (kode_golongan)",
 	)
 
+	// idx_databarang_price_lookup: Covers price columns (beliluar, ralan, jualbebas, utama)
+	// Used in stock_history_summary value calculation with CASE/COALESCE on no_faktur
+	ensureIndex(
+		"databarang",
+		"idx_databarang_price_lookup",
+		"CREATE INDEX idx_databarang_price_lookup ON databarang (kode_brng, beliluar, ralan, jualbebas, utama)",
+	)
+
 	ensureIndex(
 		"riwayat_barang_medis",
 		"idx_rbm_stockin_summary",
@@ -217,6 +225,31 @@ DatabaseConnected:
 		"riwayat_barang_medis",
 		"idx_rbm_stockin_history",
 		"CREATE INDEX idx_rbm_stockin_history ON riwayat_barang_medis (kd_bangsal, masuk, tanggal, jam, kode_brng, no_batch, no_faktur)",
+	)
+
+	// Optimized indexes for slow query fixes (< 50ms target)
+
+	// idx_rbm_date_range: Covers dashboard_stock_movement monthly aggregation (tanggal + kd_bangsal GROUP BY)
+	ensureIndex(
+		"riwayat_barang_medis",
+		"idx_rbm_date_range",
+		"CREATE INDEX idx_rbm_date_range ON riwayat_barang_medis (tanggal, kd_bangsal, masuk, keluar)",
+	)
+
+	// idx_rbm_stockout_price: Covers stock_history_summary value calculation (CASE on no_faktur + price columns)
+	// Enables index-only scan without join to databarang table
+	ensureIndex(
+		"riwayat_barang_medis",
+		"idx_rbm_stockout_price",
+		"CREATE INDEX idx_rbm_stockout_price ON riwayat_barang_medis (kd_bangsal, keluar, no_faktur, kode_brng)",
+	)
+
+	// idx_rbm_count_fast: Fast COUNT queries for stock_history_summary count_out/count_in
+	// Reduces rows scanned from millions to filtered index leaf pages
+	ensureIndex(
+		"riwayat_barang_medis",
+		"idx_rbm_count_fast",
+		"CREATE INDEX idx_rbm_count_fast ON riwayat_barang_medis (kd_bangsal, keluar, masuk)",
 	)
 
 	ensureIndex(
@@ -261,7 +294,7 @@ DatabaseConnected:
 
 	// Initial refresh
 	RefreshStockMovementSummary()
-	RefreshStockHistorySummary()
+	RefreshStockHistorySummaryIfEmpty()
 	SeedBatchNumbers()
 
 	fmt.Println("Database connected")
@@ -272,9 +305,49 @@ DatabaseConnected:
 		defer ticker.Stop()
 		for range ticker.C {
 			RefreshStockMovementSummary()
-			RefreshStockHistorySummary()
 		}
 	}()
+}
+
+func RefreshStockHistorySummaryIfEmpty() {
+	var total int64
+	if err := SIK.Table("stock_history_summary").Count(&total).Error; err != nil {
+		fmt.Println("Check stock history summary error:", err)
+		return
+	}
+	if total == 0 {
+		RefreshStockHistorySummary()
+	}
+}
+
+func AddStockHistorySummaryOut(tx *gorm.DB, kodeBrng string, noFaktur string, qty float64) error {
+	return tx.Exec(`
+		INSERT INTO stock_history_summary (id, total_qty_out, total_value_out, total_count_out)
+		SELECT 1, ?, ? * CASE
+			WHEN ? = 'Apotek' THEN COALESCE(NULLIF(beliluar, 0), NULLIF(ralan, 0), NULLIF(jualbebas, 0), utama, 0)
+			WHEN ? = 'Utama (BPJS)' THEN COALESCE(NULLIF(utama, 0), NULLIF(ralan, 0), NULLIF(jualbebas, 0), beliluar, 0)
+			ELSE COALESCE(NULLIF(ralan, 0), NULLIF(jualbebas, 0), NULLIF(beliluar, 0), utama, 0)
+		END, 1
+		FROM databarang
+		WHERE kode_brng = ?
+		ON DUPLICATE KEY UPDATE
+			total_qty_out = total_qty_out + VALUES(total_qty_out),
+			total_value_out = total_value_out + VALUES(total_value_out),
+			total_count_out = total_count_out + 1
+	`, qty, qty, noFaktur, noFaktur, kodeBrng).Error
+}
+
+func AddStockHistorySummaryIn(tx *gorm.DB, kodeBrng string, qty float64) error {
+	return tx.Exec(`
+		INSERT INTO stock_history_summary (id, total_qty_in, total_value_in, total_count_in)
+		SELECT 1, ?, ? * COALESCE(h_beli, 0), 1
+		FROM databarang
+		WHERE kode_brng = ?
+		ON DUPLICATE KEY UPDATE
+			total_qty_in = total_qty_in + VALUES(total_qty_in),
+			total_value_in = total_value_in + VALUES(total_value_in),
+			total_count_in = total_count_in + 1
+	`, qty, qty, kodeBrng).Error
 }
 
 // RefreshStockMovementSummary rebuilds the monthly stock movement summary table
@@ -304,74 +377,48 @@ func RefreshStockHistorySummary() {
 	// Stock out: group by (kode_brng, no_faktur) to avoid row multiplication,
 	// then apply price CASE per group.
 	err := SIK.Exec(`
-		INSERT INTO stock_history_summary (id, total_qty_out, total_value_out)
+		INSERT INTO stock_history_summary (id, total_qty_out, total_value_out, total_count_out)
 		SELECT 1,
-			COALESCE(SUM(t.total_keluar), 0),
-			COALESCE(SUM(t.total_keluar * CASE
-				WHEN t.no_faktur = 'Apotek' THEN COALESCE(NULLIF(databarang.beliluar, 0), NULLIF(databarang.ralan, 0), NULLIF(databarang.jualbebas, 0), databarang.utama, 0)
-				WHEN t.no_faktur = 'Utama (BPJS)' THEN COALESCE(NULLIF(databarang.utama, 0), NULLIF(databarang.ralan, 0), NULLIF(databarang.jualbebas, 0), databarang.beliluar, 0)
-				ELSE COALESCE(NULLIF(databarang.ralan, 0), NULLIF(databarang.jualbebas, 0), NULLIF(databarang.beliluar, 0), databarang.utama, 0)
-			END), 0)
+			COALESCE(SUM(r.total_keluar), 0),
+			COALESCE(SUM(r.total_keluar * CASE
+				WHEN r.no_faktur = 'Apotek' THEN COALESCE(NULLIF(d.beliluar, 0), NULLIF(d.ralan, 0), NULLIF(d.jualbebas, 0), d.utama, 0)
+				WHEN r.no_faktur = 'Utama (BPJS)' THEN COALESCE(NULLIF(d.utama, 0), NULLIF(d.ralan, 0), NULLIF(d.jualbebas, 0), d.beliluar, 0)
+				ELSE COALESCE(NULLIF(d.ralan, 0), NULLIF(d.jualbebas, 0), NULLIF(d.beliluar, 0), d.utama, 0)
+			END), 0),
+			COALESCE(SUM(r.total_count), 0)
 		FROM (
-			SELECT r.kode_brng, r.no_faktur, SUM(r.keluar) AS total_keluar
-			FROM riwayat_barang_medis r
-			WHERE r.kd_bangsal = 'AP' AND r.keluar > 0
-			GROUP BY r.kode_brng, r.no_faktur
-		) AS t
-		LEFT JOIN databarang ON t.kode_brng = databarang.kode_brng
+			SELECT kode_brng, no_faktur, SUM(keluar) AS total_keluar, COUNT(*) AS total_count
+			FROM riwayat_barang_medis FORCE INDEX (idx_rbm_stockout_price)
+			WHERE kd_bangsal = 'AP' AND keluar > 0
+			GROUP BY kode_brng, no_faktur
+		) r
+		LEFT JOIN databarang d ON r.kode_brng = d.kode_brng
 		ON DUPLICATE KEY UPDATE
 			total_qty_out = VALUES(total_qty_out),
-			total_value_out = VALUES(total_value_out)
+			total_value_out = VALUES(total_value_out),
+			total_count_out = VALUES(total_count_out)
 	`).Error
 	if err != nil {
 		fmt.Println("Refresh stock history summary (out) error:", err)
 	}
 
-	// Stock out count (number of rows, not groups)
+	// Stock in: single-pass aggregate over riwayat_barang_medis + databarang.
 	err = SIK.Exec(`
-		INSERT INTO stock_history_summary (id, total_count_out)
-		SELECT 1, COUNT(*)
-		FROM riwayat_barang_medis
-		WHERE kd_bangsal = 'AP' AND keluar > 0
-		ON DUPLICATE KEY UPDATE
-			total_count_out = VALUES(total_count_out)
-	`).Error
-	if err != nil {
-		fmt.Println("Refresh stock history summary (out count) error:", err)
-	}
-
-	// Stock in: group by kode_brng, then apply h_beli.
-	err = SIK.Exec(`
-		INSERT INTO stock_history_summary (id, total_qty_in, total_value_in)
+		INSERT INTO stock_history_summary (id, total_qty_in, total_value_in, total_count_in)
 		SELECT 1,
-			COALESCE(SUM(t.total_masuk), 0),
-			COALESCE(SUM(t.total_masuk * COALESCE(databarang.h_beli, 0)), 0)
-		FROM (
-			SELECT r.kode_brng, SUM(r.masuk) AS total_masuk
-			FROM riwayat_barang_medis r
-			WHERE r.kd_bangsal = 'AP' AND r.masuk > 0
-			GROUP BY r.kode_brng
-		) AS t
-		LEFT JOIN databarang ON t.kode_brng = databarang.kode_brng
+			COALESCE(SUM(r.masuk), 0),
+			COALESCE(SUM(r.masuk * COALESCE(d.h_beli, 0)), 0),
+			COUNT(*)
+		FROM riwayat_barang_medis r
+		LEFT JOIN databarang d ON r.kode_brng = d.kode_brng
+		WHERE r.kd_bangsal = 'AP' AND r.masuk > 0
 		ON DUPLICATE KEY UPDATE
 			total_qty_in = VALUES(total_qty_in),
-			total_value_in = VALUES(total_value_in)
-	`).Error
-	if err != nil {
-		fmt.Println("Refresh stock history summary (in) error:", err)
-	}
-
-	// Stock in count (number of rows, not groups)
-	err = SIK.Exec(`
-		INSERT INTO stock_history_summary (id, total_count_in)
-		SELECT 1, COUNT(*)
-		FROM riwayat_barang_medis
-		WHERE kd_bangsal = 'AP' AND masuk > 0
-		ON DUPLICATE KEY UPDATE
+			total_value_in = VALUES(total_value_in),
 			total_count_in = VALUES(total_count_in)
 	`).Error
 	if err != nil {
-		fmt.Println("Refresh stock history summary (in count) error:", err)
+		fmt.Println("Refresh stock history summary (in) error:", err)
 	}
 }
 
