@@ -193,6 +193,11 @@ export default function Inventory() {
     page * itemsPerPage
   )
 
+  const firstItemNumber =
+    filteredData.length === 0 ? 0 : (page - 1) * itemsPerPage + 1
+  const lastItemNumber =
+    Math.min(page * itemsPerPage, filteredData.length)
+
   return (
     <div className="space-y-6">
       {message && (
@@ -487,11 +492,7 @@ export default function Inventory() {
         {/* Pagination */}
         <div className="px-6 py-4 border-t border-border flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-          Menampilkan {
-            paginatedItems.length
-            } dari {
-            filteredData.length
-            } barang
+            Menampilkan {firstItemNumber}–{lastItemNumber} dari {filteredData.length} barang
           </p>
 
           <div className="flex gap-2 items-center">
