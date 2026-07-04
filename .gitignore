@@ -1,5 +1,5 @@
 mysql-init/*.sql
 .qoder/
 .vscode/
-AGENTS.md
+*.md
 .agents/

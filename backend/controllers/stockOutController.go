@@ -36,7 +36,7 @@ func SearchStockOutItems(c *gin.Context) {
 			COALESCE(jenis.nama, '') AS jenis,
 			COALESCE(DATE_FORMAT(databarang.expire, '%Y-%m-%d'), '') AS expire
 		`).
-		Joins("LEFT JOIN (SELECT kode_brng, SUM(COALESCE(stok, 0)) AS stok FROM gudangbarang WHERE kd_bangsal = 'AP' GROUP BY kode_brng) gudang_stock ON databarang.kode_brng = gudang_stock.kode_brng").
+		Joins("LEFT JOIN (SELECT kode_brng, SUM(COALESCE(stok, 0)) AS stok FROM gudangbarang WHERE kd_bangsal = 'AP' AND TRIM(no_batch) != '' GROUP BY kode_brng) gudang_stock ON databarang.kode_brng = gudang_stock.kode_brng").
 		Joins(`LEFT JOIN (
 			SELECT kode_brng, barcode
 			FROM barcode_obat

@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, Hash, MapPin, Package, Search, TrendingDown } from "lucide-react";
+import { AlertCircle, Hash, MapPin, Package, Search, TrendingDown, Camera } from "lucide-react";
 import { formatDate } from '@/utils/dateFormat';
 import { apiUrl } from "@/lib/api";
 import type { StockOutItem, StockOutBatchOption, RecentStockOut } from "@/types/stockOut";
+import { BarcodeScanner } from "@/components/BarcodeScanner";
 
 const destinations = [
   { value: "Apotek", label: "Apotek", priceKey: "harga_apotek" },
@@ -60,6 +61,7 @@ export default function StockOut() {
   const [note, setNote] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   const selectedQty = parseNumber(qty);
   const realtimeStock = selectedBatch
@@ -273,9 +275,28 @@ export default function StockOut() {
                     setItems([]);
                   }
                 }}
-                className="w-full pl-12 pr-4 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full pl-12 pr-12 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
               />
+              <button
+                type="button"
+                onClick={() => setIsScannerOpen(true)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-muted-foreground hover:text-primary"
+              >
+                <Camera className="w-5 h-5" />
+              </button>
             </div>
+
+              {isScannerOpen && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 9999 }}>
+                  <BarcodeScanner
+                    onScan={(code) => {
+                      setSearch(code);
+                      setIsScannerOpen(false);
+                    }}
+                    onClose={() => setIsScannerOpen(false)}
+                  />
+                </div>
+              )}
 
             {items.length > 0 && (
               <div className="mt-2 rounded-xl border border-border bg-card shadow-sm overflow-hidden">

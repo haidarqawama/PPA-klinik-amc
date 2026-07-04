@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Package, TrendingUp, Calendar, DollarSign, Search, Hash, Barcode } from "lucide-react";
+import { Package, TrendingUp, Calendar, DollarSign, Search, Hash, Barcode, Camera } from "lucide-react";
 import { formatDate } from '@/utils/dateFormat';
 import { apiUrl } from "@/lib/api";
 import type { StockInItem, RecentStockIn } from "@/types/stockIn";
+import { BarcodeScanner } from "@/components/BarcodeScanner";
 
 const formatNumberInput = (value: string) => {
   const digits = value.replace(/[^\d]/g, "");
@@ -36,6 +37,7 @@ export default function StockIn() {
   const [note, setNote] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -63,6 +65,7 @@ export default function StockIn() {
   useEffect(() => {
     const keyword = search.trim();
     if (keyword.length < 2) {
+      setItems([]);
       return;
     }
 
@@ -105,14 +108,14 @@ export default function StockIn() {
   const selectItem = (item: StockInItem) => {
     setSelectedItem(item);
     setSearch(`${item.kode_brng} - ${item.nama_brng}`);
-    setItems([]);
+    setItems([]); // Pastikan item pencarian hilang
     setPrice(item.h_beli > 0 ? formatCurrencyInput(String(Math.round(item.h_beli))) : "");
     setExpired(item.expire || "");
   };
 
   const resetForm = () => {
     setSearch("");
-    setItems([]);
+    setItems([]); // Pastikan item pencarian hilang
     setSelectedItem(null);
     setQty("");
     setPrice("");
@@ -207,9 +210,28 @@ export default function StockIn() {
                     setItems([]);
                   }
                 }}
-                className="w-full pl-12 pr-4 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full pl-12 pr-12 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
               />
+              <button
+                type="button"
+                onClick={() => setIsScannerOpen(true)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-muted-foreground hover:text-primary"
+              >
+                <Camera className="w-5 h-5" />
+              </button>
             </div>
+
+            {isScannerOpen && (
+              <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 9999 }}>
+                <BarcodeScanner
+                  onScan={(code) => {
+                    setSearch(code);
+                    setIsScannerOpen(false);
+                  }}
+                  onClose={() => setIsScannerOpen(false)}
+                />
+              </div>
+            )}
 
             {items.length > 0 && (
               <div className="mt-2 rounded-xl border border-border bg-card shadow-sm overflow-hidden">
@@ -287,19 +309,31 @@ export default function StockIn() {
                       value={barcode}
                       onChange={(event) => setBarcode(event.target.value)}
                       placeholder="8992761123456"
-                      className="w-full pl-12 pr-4 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="w-full pl-12 pr-12 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setIsScannerOpen(true)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-muted-foreground hover:text-primary"
+                    >
+                      <Camera className="w-5 h-5" />
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-end">
-                  <button
-                    type="button"
-                    className="w-full py-3 px-6 rounded-xl bg-secondary text-secondary-foreground border border-border hover:bg-secondary/80 transition-colors"
-                  >
-                    Scan Barcode
-                  </button>
-                </div>
               </div>
+
+              {isScannerOpen && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 9999 }}>
+                  <BarcodeScanner
+                    onScan={(code) => {
+                      setBarcode(code);
+                      setSearch(code);
+                      setIsScannerOpen(false);
+                    }}
+                    onClose={() => setIsScannerOpen(false)}
+                  />
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>

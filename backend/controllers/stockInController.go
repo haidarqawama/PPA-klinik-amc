@@ -27,7 +27,7 @@ func SearchStockInItems(c *gin.Context) {
 			COALESCE(golongan_barang.nama, '') AS golongan,
 			DATE_FORMAT(databarang.expire, '%Y-%m-%d') AS expire
 		`).
-		Joins("LEFT JOIN (SELECT kode_brng, SUM(COALESCE(stok, 0)) AS stok FROM gudangbarang WHERE kd_bangsal = 'AP' GROUP BY kode_brng) gudang_stock ON databarang.kode_brng = gudang_stock.kode_brng").
+		Joins("LEFT JOIN (SELECT kode_brng, SUM(COALESCE(stok, 0)) AS stok FROM gudangbarang WHERE kd_bangsal = 'AP' AND TRIM(no_batch) != '' GROUP BY kode_brng) gudang_stock ON databarang.kode_brng = gudang_stock.kode_brng").
 		Joins(`LEFT JOIN (
 			SELECT kode_brng, barcode
 			FROM barcode_obat
@@ -52,7 +52,7 @@ func SearchStockInItems(c *gin.Context) {
 		`, "%"+search+"%", "%"+search+"%", "%"+search+"%")
 	}
 
-	if err := query.Order("databarang.nama_brng ASC").Limit(20).Scan(&items).Error; err != nil {
+	if err := query.Where("COALESCE(gudang_stock.stok, 0) > 0").Order("databarang.nama_brng ASC").Limit(20).Scan(&items).Error; err != nil {
 		c.JSON(500, gin.H{"error": "Gagal mencari barang", "detail": err.Error()})
 		return
 	}
