@@ -146,17 +146,19 @@ func GetMonitoringStock(c *gin.Context) {
 
 	if err := config.SIK.Raw(`
 		SELECT COUNT(*)
-		FROM (
-			SELECT STR_TO_DATE(expire, '%Y-%m-%d') AS expire_date
-			FROM databarang
-			WHERE expire IS NOT NULL 
-				AND expire NOT IN ('', '0000-00-00')
-				AND STR_TO_DATE(expire, '%Y-%m-%d') IS NOT NULL
-				AND expire >= '1990-01-01'
-				AND YEAR(expire) >= 1990
-				AND YEAR(expire) <= YEAR(CURDATE()) + 15
-		) AS valid_dates
-		WHERE expire_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL ? DAY)
+		FROM data_batch
+		JOIN gudangbarang
+			ON data_batch.kode_brng = gudangbarang.kode_brng
+			AND data_batch.no_batch = gudangbarang.no_batch
+			AND data_batch.no_faktur = gudangbarang.no_faktur
+			AND gudangbarang.kd_bangsal = 'AP'
+		WHERE data_batch.tgl_kadaluarsa IS NOT NULL
+			AND data_batch.tgl_kadaluarsa <> ''
+			AND data_batch.tgl_kadaluarsa <> '0000-00-00'
+			AND data_batch.tgl_kadaluarsa >= '1990-01-01'
+			AND YEAR(data_batch.tgl_kadaluarsa) >= 1990
+			AND YEAR(data_batch.tgl_kadaluarsa) <= YEAR(CURDATE()) + 15
+			AND data_batch.tgl_kadaluarsa BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL ? DAY)
 	`, expiringSoonDays).Scan(&expiringSoonCount).Error; err != nil {
 		c.JSON(500, gin.H{"error": "Gagal mengambil data mendekati expired", "detail": err.Error()})
 		return
@@ -164,17 +166,19 @@ func GetMonitoringStock(c *gin.Context) {
 
 	if err := config.SIK.Raw(`
 		SELECT COUNT(*)
-		FROM (
-			SELECT STR_TO_DATE(expire, '%Y-%m-%d') AS expire_date
-			FROM databarang
-			WHERE expire IS NOT NULL 
-				AND expire NOT IN ('', '0000-00-00')
-				AND STR_TO_DATE(expire, '%Y-%m-%d') IS NOT NULL
-				AND expire >= '1990-01-01'
-				AND YEAR(expire) >= 1990
-				AND YEAR(expire) <= YEAR(CURDATE()) + 15
-		) AS valid_dates
-		WHERE expire_date < CURDATE()
+		FROM data_batch
+		JOIN gudangbarang
+			ON data_batch.kode_brng = gudangbarang.kode_brng
+			AND data_batch.no_batch = gudangbarang.no_batch
+			AND data_batch.no_faktur = gudangbarang.no_faktur
+			AND gudangbarang.kd_bangsal = 'AP'
+		WHERE data_batch.tgl_kadaluarsa IS NOT NULL
+			AND data_batch.tgl_kadaluarsa <> ''
+			AND data_batch.tgl_kadaluarsa <> '0000-00-00'
+			AND data_batch.tgl_kadaluarsa >= '1990-01-01'
+			AND YEAR(data_batch.tgl_kadaluarsa) >= 1990
+			AND YEAR(data_batch.tgl_kadaluarsa) <= YEAR(CURDATE()) + 15
+			AND data_batch.tgl_kadaluarsa < CURDATE()
 	`).Scan(&expiredCount).Error; err != nil {
 		c.JSON(500, gin.H{"error": "Gagal mengambil data expired", "detail": err.Error()})
 		return
@@ -212,26 +216,33 @@ func GetMonitoringStock(c *gin.Context) {
 		SELECT
 			databarang.kode_brng,
 			databarang.nama_brng,
-			DATE_FORMAT(databarang.expire, '%Y-%m-%d') AS expire,
-			DATEDIFF(databarang.expire, CURDATE()) AS days_left,
-			databarang.kode_brng AS batch,
+			DATE_FORMAT(data_batch.tgl_kadaluarsa, '%Y-%m-%d') AS expire,
+			DATEDIFF(data_batch.tgl_kadaluarsa, CURDATE()) AS days_left,
+			COALESCE(gudangbarang.no_batch, '') AS batch,
 			CASE
-				WHEN databarang.expire < CURDATE() THEN 'expired'
-				WHEN databarang.expire <= DATE_ADD(CURDATE(), INTERVAL ? DAY) THEN 'expiring_soon'
+				WHEN data_batch.tgl_kadaluarsa < CURDATE() THEN 'expired'
+				WHEN data_batch.tgl_kadaluarsa <= DATE_ADD(CURDATE(), INTERVAL ? DAY) THEN 'expiring_soon'
 				ELSE 'normal'
 			END AS status
 		FROM databarang
+		JOIN gudangbarang
+			ON databarang.kode_brng = gudangbarang.kode_brng
+			AND gudangbarang.kd_bangsal = 'AP'
+		JOIN data_batch
+			ON databarang.kode_brng = data_batch.kode_brng
+			AND gudangbarang.no_batch = data_batch.no_batch
+			AND gudangbarang.no_faktur = data_batch.no_faktur
 		WHERE (
-				databarang.expire < CURDATE()
-				OR databarang.expire <= DATE_ADD(CURDATE(), INTERVAL ? DAY)
+				data_batch.tgl_kadaluarsa < CURDATE()
+				OR data_batch.tgl_kadaluarsa <= DATE_ADD(CURDATE(), INTERVAL ? DAY)
 			)
-			AND databarang.expire IS NOT NULL
-			AND databarang.expire <> ''
-			AND databarang.expire <> '0000-00-00'
-			AND databarang.expire >= '1990-01-01'
-			AND YEAR(databarang.expire) >= 1990
-			AND YEAR(databarang.expire) <= YEAR(CURDATE()) + 15
-		ORDER BY databarang.expire ASC
+			AND data_batch.tgl_kadaluarsa IS NOT NULL
+			AND data_batch.tgl_kadaluarsa <> ''
+			AND data_batch.tgl_kadaluarsa <> '0000-00-00'
+			AND data_batch.tgl_kadaluarsa >= '1990-01-01'
+			AND YEAR(data_batch.tgl_kadaluarsa) >= 1990
+			AND YEAR(data_batch.tgl_kadaluarsa) <= YEAR(CURDATE()) + 15
+		ORDER BY data_batch.tgl_kadaluarsa ASC
 		LIMIT 50
 	`, expiringSoonDays, expiringSoonDays).Scan(&expiringItems).Error; err != nil {
 		c.JSON(500, gin.H{"error": "Gagal mengambil status expired barang", "detail": err.Error()})
@@ -241,13 +252,12 @@ func GetMonitoringStock(c *gin.Context) {
 	if err := config.SIK.Raw(`
 		SELECT
 			COALESCE(golongan_barang.nama, 'Tidak Diketahui') AS golongan,
-			CAST(COALESCE(SUM(IFNULL(gudangbarang.stok, 0)), 0) AS SIGNED) AS total_stock
+			CAST(COALESCE(SUM(gudang_stok.total_stok), 0) AS SIGNED) AS total_stock
 		FROM databarang
-		LEFT JOIN gudangbarang
-			ON databarang.kode_brng = gudangbarang.kode_brng
-			AND gudangbarang.kd_bangsal = 'AP'
+		`+gudangAPStockJoin+`
 		LEFT JOIN golongan_barang
 			ON databarang.kode_golongan = golongan_barang.kode
+		WHERE COALESCE(gudang_stok.total_stok, 0) > 0
 		GROUP BY golongan_barang.nama
 		ORDER BY total_stock DESC
 		LIMIT 20
@@ -260,14 +270,13 @@ func GetMonitoringStock(c *gin.Context) {
 		SELECT
 			COALESCE(golongan_barang.nama, 'Tidak Diketahui') AS golongan,
 			COUNT(DISTINCT databarang.kode_brng) AS item_count,
-			CAST(COALESCE(SUM(IFNULL(gudangbarang.stok, 0)), 0) AS SIGNED) AS total_stock,
-			COALESCE(SUM(IFNULL(gudangbarang.stok, 0) * databarang.h_beli), 0) AS inventory_value
+			CAST(COALESCE(SUM(gudang_stok.total_stok), 0) AS SIGNED) AS total_stock,
+			COALESCE(SUM(gudang_stok.total_stok * databarang.h_beli), 0) AS inventory_value
 		FROM databarang
-		LEFT JOIN gudangbarang
-			ON databarang.kode_brng = gudangbarang.kode_brng
-			AND gudangbarang.kd_bangsal = 'AP'
+		`+gudangAPStockJoin+`
 		LEFT JOIN golongan_barang
 			ON databarang.kode_golongan = golongan_barang.kode
+		WHERE COALESCE(gudang_stok.total_stok, 0) > 0
 		GROUP BY golongan_barang.nama
 		ORDER BY inventory_value DESC
 		LIMIT 20
@@ -477,13 +486,25 @@ func GetMonitoringStockDetails(c *gin.Context) {
 			SELECT
 				databarang.kode_brng,
 				databarang.nama_brng,
-				DATE_FORMAT(databarang.expire, '%Y-%m-%d') AS expire,
-				DATEDIFF(databarang.expire, CURDATE()) AS days_left,
-				databarang.kode_brng AS batch,
+				DATE_FORMAT(data_batch.tgl_kadaluarsa, '%Y-%m-%d') AS expire,
+				DATEDIFF(data_batch.tgl_kadaluarsa, CURDATE()) AS days_left,
+				COALESCE(gudangbarang.no_batch, '') AS batch,
 				'expiring_soon' AS status
 			FROM databarang
-			WHERE databarang.expire BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL ? DAY)
-			` + validExpireDateWhere + `
+			JOIN gudangbarang
+				ON databarang.kode_brng = gudangbarang.kode_brng
+				AND gudangbarang.kd_bangsal = 'AP'
+			JOIN data_batch
+				ON databarang.kode_brng = data_batch.kode_brng
+				AND gudangbarang.no_batch = data_batch.no_batch
+				AND gudangbarang.no_faktur = data_batch.no_faktur
+			WHERE data_batch.tgl_kadaluarsa BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL ? DAY)
+				AND data_batch.tgl_kadaluarsa IS NOT NULL
+				AND data_batch.tgl_kadaluarsa <> ''
+				AND data_batch.tgl_kadaluarsa <> '0000-00-00'
+				AND data_batch.tgl_kadaluarsa >= '1990-01-01'
+				AND YEAR(data_batch.tgl_kadaluarsa) >= 1990
+				AND YEAR(data_batch.tgl_kadaluarsa) <= YEAR(CURDATE()) + 15
 		`
 		var args []interface{}
 		args = append(args, expiringSoonDays)
@@ -493,7 +514,7 @@ func GetMonitoringStockDetails(c *gin.Context) {
 			args = append(args, "%"+search+"%", "%"+search+"%")
 		}
 
-		queryStr += " ORDER BY databarang.expire ASC"
+		queryStr += " ORDER BY data_batch.tgl_kadaluarsa ASC"
 
 		if err := db.Raw(queryStr, args...).Scan(&items).Error; err != nil {
 			c.JSON(500, gin.H{"error": "Gagal mengambil data mendekati expired", "detail": err.Error()})
@@ -544,13 +565,25 @@ func GetMonitoringStockDetails(c *gin.Context) {
 			SELECT
 				databarang.kode_brng,
 				databarang.nama_brng,
-				DATE_FORMAT(databarang.expire, '%Y-%m-%d') AS expire,
-				DATEDIFF(databarang.expire, CURDATE()) AS days_left,
-				databarang.kode_brng AS batch,
+				DATE_FORMAT(data_batch.tgl_kadaluarsa, '%Y-%m-%d') AS expire,
+				DATEDIFF(data_batch.tgl_kadaluarsa, CURDATE()) AS days_left,
+				COALESCE(gudangbarang.no_batch, '') AS batch,
 				'expired' AS status
 			FROM databarang
-			WHERE databarang.expire < CURDATE()
-			` + validExpireDateWhere + `
+			JOIN gudangbarang
+				ON databarang.kode_brng = gudangbarang.kode_brng
+				AND gudangbarang.kd_bangsal = 'AP'
+			JOIN data_batch
+				ON databarang.kode_brng = data_batch.kode_brng
+				AND gudangbarang.no_batch = data_batch.no_batch
+				AND gudangbarang.no_faktur = data_batch.no_faktur
+			WHERE data_batch.tgl_kadaluarsa < CURDATE()
+				AND data_batch.tgl_kadaluarsa IS NOT NULL
+				AND data_batch.tgl_kadaluarsa <> ''
+				AND data_batch.tgl_kadaluarsa <> '0000-00-00'
+				AND data_batch.tgl_kadaluarsa >= '1990-01-01'
+				AND YEAR(data_batch.tgl_kadaluarsa) >= 1990
+				AND YEAR(data_batch.tgl_kadaluarsa) <= YEAR(CURDATE()) + 15
 		`
 		var args []interface{}
 
@@ -559,7 +592,7 @@ func GetMonitoringStockDetails(c *gin.Context) {
 			args = append(args, "%"+search+"%", "%"+search+"%")
 		}
 
-		queryStr += " ORDER BY databarang.expire ASC"
+		queryStr += " ORDER BY data_batch.tgl_kadaluarsa ASC"
 
 		if err := db.Raw(queryStr, args...).Scan(&items).Error; err != nil {
 			c.JSON(500, gin.H{"error": "Gagal mengambil data expired", "detail": err.Error()})

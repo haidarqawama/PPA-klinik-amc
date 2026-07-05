@@ -6,9 +6,9 @@ const gudangAPStockJoin = `
 	LEFT JOIN (
 		SELECT
 			kode_brng,
-			GREATEST(COALESCE(SUM(stok), 0), 0) AS total_stok
+			SUM(stok) AS total_stok
 		FROM gudangbarang
-		WHERE kd_bangsal = 'AP'
+		WHERE kd_bangsal = 'AP' AND stok > 0
 		GROUP BY kode_brng
 	) gudang_stok ON databarang.kode_brng = gudang_stok.kode_brng
 `

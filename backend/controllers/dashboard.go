@@ -85,13 +85,11 @@ func GetDashboard(c *gin.Context) {
 		e := config.SIK.Raw(`
 			SELECT
 				COUNT(DISTINCT databarang.kode_brng) AS total_items,
-				CAST(COALESCE(SUM(IFNULL(gudangbarang.stok, 0)), 0) AS SIGNED) AS total_stock,
-				COALESCE(SUM(IFNULL(gudangbarang.stok, 0) * databarang.h_beli), 0) AS inventory_value,
-				COALESCE(SUM(IF(COALESCE(gudangbarang.stok, 0) <= ?, 1, 0)), 0) AS low_stock_count
+				CAST(COALESCE(SUM(gudang_stok.total_stok), 0) AS SIGNED) AS total_stock,
+				COALESCE(SUM(gudang_stok.total_stok * databarang.h_beli), 0) AS inventory_value,
+				COALESCE(SUM(IF(COALESCE(gudang_stok.total_stok, 0) <= ?, 1, 0)), 0) AS low_stock_count
 			FROM databarang
-			LEFT JOIN gudangbarang
-				ON databarang.kode_brng = gudangbarang.kode_brng
-				AND gudangbarang.kd_bangsal = 'AP'
+			`+gudangAPStockJoin+`
 		`, 50).Scan(&summary).Error
 		captureErr(e)
 	}()
@@ -132,9 +130,7 @@ func GetDashboard(c *gin.Context) {
 			SELECT COUNT(*) FROM (
 				SELECT golongan_barang.nama
 				FROM databarang
-				LEFT JOIN gudangbarang
-					ON databarang.kode_brng = gudangbarang.kode_brng
-					AND gudangbarang.kd_bangsal = 'AP'
+				`+gudangAPStockJoin+`
 				LEFT JOIN golongan_barang
 					ON databarang.kode_golongan = golongan_barang.kode
 				GROUP BY golongan_barang.nama
@@ -149,11 +145,9 @@ func GetDashboard(c *gin.Context) {
 			SELECT
 				COALESCE(golongan_barang.nama, 'Tidak Diketahui') AS label,
 				COUNT(DISTINCT databarang.kode_brng) AS item_count,
-				CAST(COALESCE(SUM(IFNULL(gudangbarang.stok, 0)), 0) AS SIGNED) AS total_stock
+				CAST(COALESCE(SUM(gudang_stok.total_stok), 0) AS SIGNED) AS total_stock
 			FROM databarang
-			LEFT JOIN gudangbarang
-				ON databarang.kode_brng = gudangbarang.kode_brng
-				AND gudangbarang.kd_bangsal = 'AP'
+			`+gudangAPStockJoin+`
 			LEFT JOIN golongan_barang
 				ON databarang.kode_golongan = golongan_barang.kode
 			GROUP BY golongan_barang.nama

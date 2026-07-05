@@ -143,6 +143,16 @@ func ConnectDatabase() {
 
 DatabaseConnected:
 
+	// Connection pooling — critical for remote DB over Tailscale
+	sqlDB, err := SIK.DB()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to get underlying SQL DB: %v", err))
+	}
+	sqlDB.SetMaxOpenConns(25)
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetConnMaxLifetime(5 * time.Minute)
+	sqlDB.SetConnMaxIdleTime(3 * time.Minute)
+
 	// =========================
 	// AUTO CREATE TABLE BARCODE
 	// =========================
