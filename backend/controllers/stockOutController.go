@@ -3,12 +3,25 @@ package controllers
 import (
 	"backend/config"
 	"backend/models"
+	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
+
+var (
+	stockOutHistoryCache   = make(map[string]stockOutHistoryCacheEntry)
+	stockOutHistoryCacheMu sync.RWMutex
+)
+
+type stockOutHistoryCacheEntry struct {
+	Total     int64
+	Rows      []models.StockOutHistory
+	Timestamp time.Time
+}
 
 func SearchStockOutItems(c *gin.Context) {
 	search := c.Query("search")
@@ -185,6 +198,18 @@ func GetStockOutHistory(c *gin.Context) {
 		}
 	}
 
+	// Check cache (skip for search queries)
+	cacheKey := fmt.Sprintf("stockout:%d:%d:%s", page, limit, date)
+	if search == "" {
+		stockOutHistoryCacheMu.RLock()
+		if entry, ok := stockOutHistoryCache[cacheKey]; ok && time.Since(entry.Timestamp) < stockHistoryCacheTTL {
+			stockOutHistoryCacheMu.RUnlock()
+			c.JSON(200, gin.H{"total": entry.Total, "data": entry.Rows})
+			return
+		}
+		stockOutHistoryCacheMu.RUnlock()
+	}
+
 	var total int64
 	if search == "" {
 		// Fast count: no JOINs needed when no search
@@ -327,6 +352,13 @@ func GetStockOutHistory(c *gin.Context) {
 			c.JSON(500, gin.H{"error": "Gagal mengambil riwayat barang keluar", "detail": err.Error()})
 			return
 		}
+	}
+
+	// Cache non-search results
+	if search == "" {
+		stockOutHistoryCacheMu.Lock()
+		stockOutHistoryCache[cacheKey] = stockOutHistoryCacheEntry{Total: total, Rows: rows, Timestamp: time.Now()}
+		stockOutHistoryCacheMu.Unlock()
 	}
 
 	c.JSON(200, gin.H{

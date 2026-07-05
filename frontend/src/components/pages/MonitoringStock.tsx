@@ -572,7 +572,7 @@ export default function MonitoringStock() {
 
                 return (
                   <div
-                    key={`${item.kode_brng}-${item.expire}`}
+                    key={`${item.kode_brng}-${item.batch || item.expire}`}
                     className={`p-4 hover:bg-muted/20 transition-colors ${isExpired ? "bg-destructive/5" : ""}`}
                   >
                     <div className="flex items-center justify-between">

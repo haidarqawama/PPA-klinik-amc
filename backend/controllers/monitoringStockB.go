@@ -3,12 +3,27 @@ package controllers
 import (
 	"backend/config"
 	"backend/models"
+	"encoding/json"
 	"math"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
+
+const monitoringCacheTTL = 30 * time.Second
+
+var (
+	monitoringCache   = make(map[string]monitoringCacheEntry)
+	monitoringCacheMu sync.RWMutex
+)
+
+type monitoringCacheEntry struct {
+	Data      *models.MonitoringStockResponse
+	Timestamp time.Time
+}
 
 const (
 	criticalStockThreshold = 20
@@ -87,6 +102,26 @@ func GetMonitoringStock(c *gin.Context) {
 		period = "month"
 	}
 
+	// Serve cached response if still valid
+	monitoringCacheMu.RLock()
+	if entry, ok := monitoringCache[period]; ok && time.Since(entry.Timestamp) < monitoringCacheTTL {
+		monitoringCacheMu.RUnlock()
+		c.JSON(200, gin.H{
+			"data": entry.Data,
+			"meta": gin.H{
+				"period":             period,
+				"observation_days":   entry.Data.ObservationDays,
+				"observation_period": entry.Data.ObservationPeriod,
+				"critical_threshold": criticalStockThreshold,
+				"restock_threshold":  restockStockThreshold,
+				"expiring_soon_days": expiringSoonDays,
+				"stock_source":       "gudangbarang (kd_bangsal=AP)",
+			},
+		})
+		return
+	}
+	monitoringCacheMu.RUnlock()
+
 	observationDays := monitoringObservationDays(period)
 
 	var anchorDate string
@@ -133,165 +168,13 @@ func GetMonitoringStock(c *gin.Context) {
 	var golonganValues []models.MonitoringStockGolonganValue
 	var movementRows []models.MonitoringStockMovementRow
 
-	if err := config.SIK.Raw(`
-		SELECT
-			COALESCE(SUM(IF(COALESCE(gudang_stok.total_stok, 0) < ?, 1, 0)), 0) AS critical_stock_count,
-			COALESCE(SUM(IF(COALESCE(gudang_stok.total_stok, 0) >= ? AND COALESCE(gudang_stok.total_stok, 0) < ?, 1, 0)), 0) AS restock_needed_count
-		FROM databarang
-		`+gudangAPStockJoin+`
-	`, criticalStockThreshold, criticalStockThreshold, restockStockThreshold).Scan(&summary).Error; err != nil {
-		c.JSON(500, gin.H{"error": "Gagal mengambil ringkasan monitoring stok", "detail": err.Error()})
-		return
-	}
-
-	if err := config.SIK.Raw(`
-		SELECT COUNT(*)
-		FROM data_batch
-		JOIN gudangbarang
-			ON data_batch.kode_brng = gudangbarang.kode_brng
-			AND data_batch.no_batch = gudangbarang.no_batch
-			AND data_batch.no_faktur = gudangbarang.no_faktur
-			AND gudangbarang.kd_bangsal = 'AP'
-		WHERE data_batch.tgl_kadaluarsa IS NOT NULL
-			AND data_batch.tgl_kadaluarsa <> ''
-			AND data_batch.tgl_kadaluarsa <> '0000-00-00'
-			AND data_batch.tgl_kadaluarsa >= '1990-01-01'
-			AND YEAR(data_batch.tgl_kadaluarsa) >= 1990
-			AND YEAR(data_batch.tgl_kadaluarsa) <= YEAR(CURDATE()) + 15
-			AND data_batch.tgl_kadaluarsa BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL ? DAY)
-	`, expiringSoonDays).Scan(&expiringSoonCount).Error; err != nil {
-		c.JSON(500, gin.H{"error": "Gagal mengambil data mendekati expired", "detail": err.Error()})
-		return
-	}
-
-	if err := config.SIK.Raw(`
-		SELECT COUNT(*)
-		FROM data_batch
-		JOIN gudangbarang
-			ON data_batch.kode_brng = gudangbarang.kode_brng
-			AND data_batch.no_batch = gudangbarang.no_batch
-			AND data_batch.no_faktur = gudangbarang.no_faktur
-			AND gudangbarang.kd_bangsal = 'AP'
-		WHERE data_batch.tgl_kadaluarsa IS NOT NULL
-			AND data_batch.tgl_kadaluarsa <> ''
-			AND data_batch.tgl_kadaluarsa <> '0000-00-00'
-			AND data_batch.tgl_kadaluarsa >= '1990-01-01'
-			AND YEAR(data_batch.tgl_kadaluarsa) >= 1990
-			AND YEAR(data_batch.tgl_kadaluarsa) <= YEAR(CURDATE()) + 15
-			AND data_batch.tgl_kadaluarsa < CURDATE()
-	`).Scan(&expiredCount).Error; err != nil {
-		c.JSON(500, gin.H{"error": "Gagal mengambil data expired", "detail": err.Error()})
-		return
-	}
-
-	summary.ExpiringSoonCount = expiringSoonCount
-	summary.ExpiredCount = expiredCount
-
-	if err := config.SIK.Raw(`
-		SELECT
-			databarang.kode_brng,
-			databarang.nama_brng,
-			COALESCE(gudang_stok.total_stok, 0) AS stok,
-			COALESCE(golongan_barang.nama, 'Tidak Diketahui') AS golongan,
-			CASE
-				WHEN COALESCE(gudang_stok.total_stok, 0) < ? THEN 'critical'
-				ELSE 'warning'
-			END AS status,
-			COALESCE(kodesatuan.satuan, '-') AS satuan
-		FROM databarang
-		`+gudangAPStockJoin+`
-		LEFT JOIN golongan_barang
-			ON databarang.kode_golongan = golongan_barang.kode
-		LEFT JOIN kodesatuan
-			ON databarang.kode_sat = kodesatuan.kode_sat
-		WHERE COALESCE(gudang_stok.total_stok, 0) > 0 AND COALESCE(gudang_stok.total_stok, 0) < ?
-		ORDER BY COALESCE(gudang_stok.total_stok, 0) ASC
-		LIMIT 50
-	`, criticalStockThreshold, restockStockThreshold).Scan(&lowStockItems).Error; err != nil {
-		c.JSON(500, gin.H{"error": "Gagal mengambil barang hampir habis", "detail": err.Error()})
-		return
-	}
-
-	if err := config.SIK.Raw(`
-		SELECT
-			databarang.kode_brng,
-			databarang.nama_brng,
-			DATE_FORMAT(data_batch.tgl_kadaluarsa, '%Y-%m-%d') AS expire,
-			DATEDIFF(data_batch.tgl_kadaluarsa, CURDATE()) AS days_left,
-			COALESCE(gudangbarang.no_batch, '') AS batch,
-			CASE
-				WHEN data_batch.tgl_kadaluarsa < CURDATE() THEN 'expired'
-				WHEN data_batch.tgl_kadaluarsa <= DATE_ADD(CURDATE(), INTERVAL ? DAY) THEN 'expiring_soon'
-				ELSE 'normal'
-			END AS status
-		FROM databarang
-		JOIN gudangbarang
-			ON databarang.kode_brng = gudangbarang.kode_brng
-			AND gudangbarang.kd_bangsal = 'AP'
-		JOIN data_batch
-			ON databarang.kode_brng = data_batch.kode_brng
-			AND gudangbarang.no_batch = data_batch.no_batch
-			AND gudangbarang.no_faktur = data_batch.no_faktur
-		WHERE (
-				data_batch.tgl_kadaluarsa < CURDATE()
-				OR data_batch.tgl_kadaluarsa <= DATE_ADD(CURDATE(), INTERVAL ? DAY)
-			)
-			AND data_batch.tgl_kadaluarsa IS NOT NULL
-			AND data_batch.tgl_kadaluarsa <> ''
-			AND data_batch.tgl_kadaluarsa <> '0000-00-00'
-			AND data_batch.tgl_kadaluarsa >= '1990-01-01'
-			AND YEAR(data_batch.tgl_kadaluarsa) >= 1990
-			AND YEAR(data_batch.tgl_kadaluarsa) <= YEAR(CURDATE()) + 15
-		ORDER BY data_batch.tgl_kadaluarsa ASC
-		LIMIT 50
-	`, expiringSoonDays, expiringSoonDays).Scan(&expiringItems).Error; err != nil {
-		c.JSON(500, gin.H{"error": "Gagal mengambil status expired barang", "detail": err.Error()})
-		return
-	}
-
-	if err := config.SIK.Raw(`
-		SELECT
-			COALESCE(golongan_barang.nama, 'Tidak Diketahui') AS golongan,
-			CAST(COALESCE(SUM(gudang_stok.total_stok), 0) AS SIGNED) AS total_stock
-		FROM databarang
-		`+gudangAPStockJoin+`
-		LEFT JOIN golongan_barang
-			ON databarang.kode_golongan = golongan_barang.kode
-		WHERE COALESCE(gudang_stok.total_stok, 0) > 0
-		GROUP BY golongan_barang.nama
-		ORDER BY total_stock DESC
-		LIMIT 20
-	`).Scan(&golonganStats).Error; err != nil {
-		c.JSON(500, gin.H{"error": "Gagal mengambil statistik golongan", "detail": err.Error()})
-		return
-	}
-
-	if err := config.SIK.Raw(`
-		SELECT
-			COALESCE(golongan_barang.nama, 'Tidak Diketahui') AS golongan,
-			COUNT(DISTINCT databarang.kode_brng) AS item_count,
-			CAST(COALESCE(SUM(gudang_stok.total_stok), 0) AS SIGNED) AS total_stock,
-			COALESCE(SUM(gudang_stok.total_stok * databarang.h_beli), 0) AS inventory_value
-		FROM databarang
-		`+gudangAPStockJoin+`
-		LEFT JOIN golongan_barang
-			ON databarang.kode_golongan = golongan_barang.kode
-		WHERE COALESCE(gudang_stok.total_stok, 0) > 0
-		GROUP BY golongan_barang.nama
-		ORDER BY inventory_value DESC
-		LIMIT 20
-	`).Scan(&golonganValues).Error; err != nil {
-		c.JSON(500, gin.H{"error": "Gagal mengambil nilai inventory per golongan", "detail": err.Error()})
-		return
-	}
-
 	movementQuery := `
 		SELECT
 			databarang.kode_brng,
 			databarang.nama_brng,
 			COALESCE(gudang_stok.total_stok, 0) AS stok_akhir,
-			COALESCE(keluar.total_keluar, 0) AS barang_keluar,
-			COALESCE(masuk.total_masuk, 0) AS barang_masuk,
+			COALESCE(movements.total_keluar, 0) AS barang_keluar,
+			COALESCE(movements.total_masuk, 0) AS barang_masuk,
 			COALESCE(kodesatuan.satuan, '-') AS satuan
 		FROM databarang
 		` + gudangAPStockJoin + `
@@ -300,30 +183,146 @@ func GetMonitoringStock(c *gin.Context) {
 		LEFT JOIN (
 			SELECT
 				riwayat_barang_medis.kode_brng,
-				SUM(COALESCE(riwayat_barang_medis.keluar, 0)) AS total_keluar
-			FROM riwayat_barang_medis
-			WHERE riwayat_barang_medis.tanggal IS NOT NULL
-				AND riwayat_barang_medis.kd_bangsal = 'AP'
-				` + rbmDateFilter + `
-			GROUP BY riwayat_barang_medis.kode_brng
-		) keluar ON databarang.kode_brng = keluar.kode_brng
-		LEFT JOIN (
-			SELECT
-				riwayat_barang_medis.kode_brng,
+				SUM(COALESCE(riwayat_barang_medis.keluar, 0)) AS total_keluar,
 				SUM(COALESCE(riwayat_barang_medis.masuk, 0)) AS total_masuk
 			FROM riwayat_barang_medis
 			WHERE riwayat_barang_medis.tanggal IS NOT NULL
 				AND riwayat_barang_medis.kd_bangsal = 'AP'
 				` + rbmDateFilter + `
 			GROUP BY riwayat_barang_medis.kode_brng
-		) masuk ON databarang.kode_brng = masuk.kode_brng
-		ORDER BY COALESCE(keluar.total_keluar, 0) DESC, databarang.nama_brng ASC
+		) movements ON databarang.kode_brng = movements.kode_brng
+		ORDER BY COALESCE(movements.total_keluar, 0) DESC, databarang.nama_brng ASC
 	`
 
-	if err := config.SIK.Raw(movementQuery).Scan(&movementRows).Error; err != nil {
-		c.JSON(500, gin.H{"error": "Gagal mengambil data pergerakan stok", "detail": err.Error()})
+	// Run all queries in parallel to minimize total latency over network
+	var wg sync.WaitGroup
+	var firstErr error
+	captureErr := func(err error) {
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+
+	wg.Add(4)
+
+	// 1. Summary counts + golongan stats/values from pre-computed table
+	go func() {
+		defer wg.Done()
+		type summaryRow struct {
+			Critical int64 `gorm:"column:critical_stock_count"`
+			Restock  int64 `gorm:"column:restock_needed_count"`
+			ExpSoon  int64 `gorm:"column:expiring_soon_count"`
+			Expired  int64  `gorm:"column:expired_count"`
+			GSJ      string `gorm:"column:golongan_stats"`
+			GVJ      string `gorm:"column:golongan_values"`
+		}
+		var row summaryRow
+		e := config.SIK.Raw(`
+			SELECT critical_stock_count, restock_needed_count,
+				expiring_soon_count, expired_count,
+				COALESCE(golongan_stats, '') AS golongan_stats,
+				COALESCE(golongan_values, '') AS golongan_values
+			FROM monitoring_stock_summary WHERE id = 1
+		`).Scan(&row).Error
+		if e != nil {
+			captureErr(e)
+			return
+		}
+		summary.CriticalStockCount = row.Critical
+		summary.RestockNeededCount = row.Restock
+		expiringSoonCount = row.ExpSoon
+		expiredCount = row.Expired
+		if row.GSJ != "" {
+			json.Unmarshal([]byte(row.GSJ), &golonganStats)
+		}
+		if row.GVJ != "" {
+			json.Unmarshal([]byte(row.GVJ), &golonganValues)
+		}
+	}()
+
+	// 2. Low stock items
+	go func() {
+		defer wg.Done()
+		e := config.SIK.Raw(`
+			SELECT
+				databarang.kode_brng,
+				databarang.nama_brng,
+				COALESCE(gudang_stok.total_stok, 0) AS stok,
+				COALESCE(golongan_barang.nama, 'Tidak Diketahui') AS golongan,
+				CASE
+					WHEN COALESCE(gudang_stok.total_stok, 0) < ? THEN 'critical'
+					ELSE 'warning'
+				END AS status,
+				COALESCE(kodesatuan.satuan, '-') AS satuan
+			FROM databarang
+			`+gudangAPStockJoin+`
+			LEFT JOIN golongan_barang
+				ON databarang.kode_golongan = golongan_barang.kode
+			LEFT JOIN kodesatuan
+				ON databarang.kode_sat = kodesatuan.kode_sat
+			WHERE COALESCE(gudang_stok.total_stok, 0) > 0 AND COALESCE(gudang_stok.total_stok, 0) < ?
+			ORDER BY COALESCE(gudang_stok.total_stok, 0) ASC
+			LIMIT 50
+		`, criticalStockThreshold, restockStockThreshold).Scan(&lowStockItems).Error
+		captureErr(e)
+	}()
+
+	// 3. Expiring/expired items
+	go func() {
+		defer wg.Done()
+		e := config.SIK.Raw(`
+			SELECT
+				databarang.kode_brng,
+				databarang.nama_brng,
+				DATE_FORMAT(data_batch.tgl_kadaluarsa, '%Y-%m-%d') AS expire,
+				DATEDIFF(data_batch.tgl_kadaluarsa, CURDATE()) AS days_left,
+				COALESCE(gudangbarang.no_batch, '') AS batch,
+				CASE
+					WHEN data_batch.tgl_kadaluarsa < CURDATE() THEN 'expired'
+					WHEN data_batch.tgl_kadaluarsa <= DATE_ADD(CURDATE(), INTERVAL ? DAY) THEN 'expiring_soon'
+					ELSE 'normal'
+				END AS status
+			FROM databarang
+			JOIN gudangbarang
+				ON databarang.kode_brng = gudangbarang.kode_brng
+				AND gudangbarang.kd_bangsal = 'AP'
+			JOIN data_batch
+				ON databarang.kode_brng = data_batch.kode_brng
+				AND gudangbarang.no_batch = data_batch.no_batch
+				AND gudangbarang.no_faktur = data_batch.no_faktur
+			WHERE (
+					data_batch.tgl_kadaluarsa < CURDATE()
+					OR data_batch.tgl_kadaluarsa <= DATE_ADD(CURDATE(), INTERVAL ? DAY)
+				)
+				AND data_batch.tgl_kadaluarsa IS NOT NULL
+				AND data_batch.tgl_kadaluarsa <> ''
+				AND data_batch.tgl_kadaluarsa <> '0000-00-00'
+				AND data_batch.tgl_kadaluarsa >= '1990-01-01'
+				AND YEAR(data_batch.tgl_kadaluarsa) >= 1990
+				AND YEAR(data_batch.tgl_kadaluarsa) <= YEAR(CURDATE()) + 15
+			ORDER BY data_batch.tgl_kadaluarsa ASC
+			LIMIT 50
+		`, expiringSoonDays, expiringSoonDays).Scan(&expiringItems).Error
+		captureErr(e)
+	}()
+
+
+	// 8. Movement (stock in/out per item)
+	go func() {
+		defer wg.Done()
+		e := config.SIK.Raw(movementQuery).Scan(&movementRows).Error
+		captureErr(e)
+	}()
+
+	wg.Wait()
+
+	if firstErr != nil {
+		c.JSON(500, gin.H{"error": "Gagal mengambil data monitoring stok", "detail": firstErr.Error()})
 		return
 	}
+
+	summary.ExpiringSoonCount = expiringSoonCount
+	summary.ExpiredCount = expiredCount
 
 	turnoverItems := make([]models.MonitoringStockTurnover, 0, len(movementRows))
 	coverageItems := make([]models.MonitoringStockCoverage, 0, len(movementRows))
@@ -385,6 +384,11 @@ func GetMonitoringStock(c *gin.Context) {
 		ObservationDays:   observationDays,
 		ObservationPeriod: monitoringObservationLabel(period),
 	}
+
+	// Cache response
+	monitoringCacheMu.Lock()
+	monitoringCache[period] = monitoringCacheEntry{Data: &response, Timestamp: time.Now()}
+	monitoringCacheMu.Unlock()
 
 	c.JSON(200, gin.H{
 		"data": response,

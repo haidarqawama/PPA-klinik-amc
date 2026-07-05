@@ -355,7 +355,11 @@ export default function Dashboard() {
                 <div>
                   <p className="text-sm text-muted-foreground">Total Stok Barang</p>
                   <p className="text-2xl font-semibold mt-1">{totalStockText}</p>
-                  <p className="text-xs text-success mt-1">+12% dari bulan lalu</p>
+                  {summary?.stock_change_percent != null ? (
+                    <p className={`text-xs mt-1 ${summary.stock_change_percent >= 0 ? "text-success" : "text-destructive"}`}>
+                      {summary.stock_change_percent >= 0 ? "+" : ""}{summary.stock_change_percent.toFixed(1)}% dari bulan lalu
+                    </p>
+                  ) : null}
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
                   <Package className="w-6 h-6 text-primary" />

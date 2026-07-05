@@ -10,12 +10,13 @@ import (
 
 const latestBatchJoin = `
 	LEFT JOIN (
-		SELECT
-			data_batch.kode_brng,
-			SUBSTRING_INDEX(GROUP_CONCAT(data_batch.no_batch ORDER BY data_batch.tgl_beli DESC, data_batch.no_batch DESC SEPARATOR '||'), '||', 1) AS no_batch,
-			SUBSTRING_INDEX(GROUP_CONCAT(data_batch.no_faktur ORDER BY data_batch.tgl_beli DESC, data_batch.no_batch DESC SEPARATOR '||'), '||', 1) AS no_faktur
-		FROM data_batch
-		GROUP BY data_batch.kode_brng
+		SELECT db.kode_brng, db.no_batch, db.no_faktur
+		FROM data_batch db
+		INNER JOIN (
+			SELECT kode_brng, MAX(tgl_beli) AS max_tgl_beli
+			FROM data_batch
+			GROUP BY kode_brng
+		) latest ON db.kode_brng = latest.kode_brng AND db.tgl_beli = latest.max_tgl_beli
 	) latest_batch ON databarang.kode_brng = latest_batch.kode_brng
 `
 
@@ -111,7 +112,20 @@ func GetItems(c *gin.Context) {
 
 	search := c.Query("search")
 
-	config.SIK.Raw(`SELECT COUNT(1) FROM databarang`).Scan(&total)
+	countQuery := `
+		SELECT COUNT(DISTINCT databarang.kode_brng) FROM databarang
+		LEFT JOIN (
+			SELECT kode_brng, SUM(COALESCE(stok, 0)) AS stok
+			FROM gudangbarang WHERE kd_bangsal = 'AP' GROUP BY kode_brng
+		) gudang_inventory ON databarang.kode_brng = gudang_inventory.kode_brng
+		WHERE COALESCE(gudang_inventory.stok, 0) > 0
+	`
+	var countArgs []interface{}
+	if search != "" {
+		countQuery += ` AND (databarang.nama_brng LIKE ? OR databarang.kode_brng LIKE ?)`
+		countArgs = append(countArgs, "%"+search+"%", "%"+search+"%")
+	}
+	config.SIK.Raw(countQuery, countArgs...).Scan(&total)
 
 	query := config.SIK.
 		Table("databarang").

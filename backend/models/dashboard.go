@@ -17,12 +17,13 @@ type DashboardCacheEntry struct {
 }
 
 type DashboardSummary struct {
-	TotalItems        int64   `json:"total_items"`
-	TotalStock        int64   `json:"total_stock"`
-	LowStockCount     int64   `json:"low_stock_count"`
-	ExpiringSoonCount int64   `json:"expiring_soon_count"`
-	ExpiredCount      int64   `json:"expired_count"`
-	InventoryValue    float64 `json:"inventory_value"`
+	TotalItems         int64   `json:"total_items"`
+	TotalStock         int64   `json:"total_stock"`
+	LowStockCount      int64   `json:"low_stock_count"`
+	ExpiringSoonCount  int64   `json:"expiring_soon_count"`
+	ExpiredCount       int64   `json:"expired_count"`
+	InventoryValue     float64 `json:"inventory_value"`
+	StockChangePercent *float64 `json:"stock_change_percent"`
 }
 
 type DashboardDistribution struct {

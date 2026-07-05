@@ -77,49 +77,55 @@ func GetDashboard(c *gin.Context) {
 		errMu.Unlock()
 	}
 
-	wg.Add(6)
+	wg.Add(5)
 
-	// 1. Summary metrics
+	// 1 + 2. Summary + stock change from pre-computed table
 	go func() {
 		defer wg.Done()
-		e := config.SIK.Raw(`
-			SELECT
-				COUNT(DISTINCT databarang.kode_brng) AS total_items,
-				CAST(COALESCE(SUM(gudang_stok.total_stok), 0) AS SIGNED) AS total_stock,
-				COALESCE(SUM(gudang_stok.total_stok * databarang.h_beli), 0) AS inventory_value,
-				COALESCE(SUM(IF(COALESCE(gudang_stok.total_stok, 0) <= ?, 1, 0)), 0) AS low_stock_count
-			FROM databarang
-			`+gudangAPStockJoin+`
-		`, 50).Scan(&summary).Error
-		captureErr(e)
-	}()
-
-	// 2. Combined expiring + expired counts
-	go func() {
-		defer wg.Done()
-		type expireCounts struct {
-			ExpiringSoon int64 `gorm:"column:expiring_soon"`
-			Expired      int64 `gorm:"column:expired"`
+		type sRow struct {
+			TotalItems     int64   `gorm:"column:total_items"`
+			TotalStock     int64   `gorm:"column:total_stock"`
+			InventoryValue float64 `gorm:"column:inventory_value"`
+			LowStockCount  int64   `gorm:"column:low_stock_count"`
+			ExpiringSoon   int64   `gorm:"column:expiring_soon_count"`
+			Expired        int64   `gorm:"column:expired_count"`
 		}
-		var counts expireCounts
+		var row sRow
 		e := config.SIK.Raw(`
-			SELECT
-				SUM(CASE WHEN expire_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END) AS expiring_soon,
-				SUM(CASE WHEN expire_date < CURDATE() THEN 1 ELSE 0 END) AS expired
-			FROM (
-				SELECT STR_TO_DATE(expire, '%Y-%m-%d') AS expire_date
-				FROM databarang
-				WHERE expire IS NOT NULL 
-					AND expire NOT IN ('', '0000-00-00')
-					AND STR_TO_DATE(expire, '%Y-%m-%d') IS NOT NULL
-			) AS valid_dates
-		`).Scan(&counts).Error
+			SELECT total_items, total_stock, inventory_value, low_stock_count,
+				expiring_soon_count, expired_count
+			FROM monitoring_stock_summary WHERE id = 1
+		`).Scan(&row).Error
 		if e != nil {
 			captureErr(e)
 			return
 		}
-		expiringSoonCount = counts.ExpiringSoon
-		expiredCount = counts.Expired
+		summary.TotalItems = row.TotalItems
+		summary.TotalStock = row.TotalStock
+		summary.InventoryValue = row.InventoryValue
+		summary.LowStockCount = row.LowStockCount
+		expiringSoonCount = row.ExpiringSoon
+		expiredCount = row.Expired
+
+		// Stock change vs previous month
+		type movRow struct {
+			Masuk  float64
+			Keluar float64
+		}
+		var m movRow
+		config.SIK.Raw(`
+			SELECT COALESCE(SUM(barang_masuk), 0) AS masuk, COALESCE(SUM(barang_keluar), 0) AS keluar
+			FROM dashboard_stock_movement
+			WHERE kd_bangsal = 'AP'
+				AND month >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m')
+				AND month < DATE_FORMAT(CURDATE(), '%Y-%m')
+		`).Scan(&m)
+		netChange := m.Masuk - m.Keluar
+		prevStock := row.TotalStock - int64(netChange)
+		if prevStock > 0 {
+			pct := float64(row.TotalStock-prevStock) / float64(prevStock) * 100
+			summary.StockChangePercent = &pct
+		}
 	}()
 
 	// 3. Golongan distribution (paginated)

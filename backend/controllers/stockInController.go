@@ -3,12 +3,27 @@ package controllers
 import (
 	"backend/config"
 	"backend/models"
+	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
+
+const stockHistoryCacheTTL = 15 * time.Second
+
+var (
+	stockInHistoryCache   = make(map[string]stockInHistoryCacheEntry)
+	stockInHistoryCacheMu sync.RWMutex
+)
+
+type stockInHistoryCacheEntry struct {
+	Total     int64
+	Rows      []models.StockInHistory
+	Timestamp time.Time
+}
 
 func SearchStockInItems(c *gin.Context) {
 	search := c.Query("search")
@@ -104,6 +119,18 @@ func GetStockInHistory(c *gin.Context) {
 		if parsedLimit, err := strconv.Atoi(rawLimit); err == nil && parsedLimit > 0 && parsedLimit <= 100 {
 			limit = parsedLimit
 		}
+	}
+
+	// Check cache (skip for search queries since they're less predictable)
+	cacheKey := fmt.Sprintf("stockin:%d:%d:%s", page, limit, date)
+	if search == "" {
+		stockInHistoryCacheMu.RLock()
+		if entry, ok := stockInHistoryCache[cacheKey]; ok && time.Since(entry.Timestamp) < stockHistoryCacheTTL {
+			stockInHistoryCacheMu.RUnlock()
+			c.JSON(200, gin.H{"total": entry.Total, "data": entry.Rows})
+			return
+		}
+		stockInHistoryCacheMu.RUnlock()
 	}
 
 	var rows []models.StockInHistory
@@ -253,6 +280,13 @@ func GetStockInHistory(c *gin.Context) {
 			c.JSON(500, gin.H{"error": "Gagal mengambil riwayat barang masuk", "detail": err.Error()})
 			return
 		}
+	}
+
+	// Cache non-search results
+	if search == "" {
+		stockInHistoryCacheMu.Lock()
+		stockInHistoryCache[cacheKey] = stockInHistoryCacheEntry{Total: total, Rows: rows, Timestamp: time.Now()}
+		stockInHistoryCacheMu.Unlock()
 	}
 
 	c.JSON(200, gin.H{

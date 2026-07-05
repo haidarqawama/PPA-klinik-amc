@@ -268,6 +268,32 @@ DatabaseConnected:
 		"CREATE INDEX idx_barcode_obat_lookup ON barcode_obat (kode_brng, no_batch, no_faktur, barcode(100))",
 	)
 
+	// data_batch: heavily JOINed on (kode_brng, no_batch, no_faktur), filtered on tgl_kadaluarsa
+	ensureIndex(
+		"data_batch",
+		"idx_databatch_lookup",
+		"CREATE INDEX idx_databatch_lookup ON data_batch (kode_brng, no_batch, no_faktur)",
+	)
+	ensureIndex(
+		"data_batch",
+		"idx_databatch_expiry",
+		"CREATE INDEX idx_databatch_expiry ON data_batch (tgl_kadaluarsa)",
+	)
+
+	// gudangbarang: covering index for batch-level stock queries
+	ensureIndex(
+		"gudangbarang",
+		"idx_gudangbarang_batch_stock",
+		"CREATE INDEX idx_gudangbarang_batch_stock ON gudangbarang (kd_bangsal, kode_brng, no_batch, no_faktur, stok)",
+	)
+
+	// databarang: nama_brng used in LIKE search across 4+ controllers
+	ensureIndex(
+		"databarang",
+		"idx_databarang_nama_brng",
+		"CREATE INDEX idx_databarang_nama_brng ON databarang (nama_brng)",
+	)
+
 	// idx_rbm_dashboard_recent (kd_bangsal, tanggal, jam, keluar, masuk) already exists above
 
 	// =========================
@@ -302,9 +328,32 @@ DatabaseConnected:
 	SIK.Exec("ALTER TABLE stock_history_summary ADD COLUMN total_count_out INT NOT NULL DEFAULT 0")
 	SIK.Exec("ALTER TABLE stock_history_summary ADD COLUMN total_count_in INT NOT NULL DEFAULT 0")
 
+	// =========================
+	// CREATE SUMMARY TABLE FOR MONITORING STOCK + DASHBOARD (pre-computed aggregates)
+	// =========================
+	SIK.Exec(`
+		CREATE TABLE IF NOT EXISTS monitoring_stock_summary (
+			id TINYINT UNSIGNED NOT NULL DEFAULT 1 PRIMARY KEY,
+			critical_stock_count INT NOT NULL DEFAULT 0,
+			restock_needed_count INT NOT NULL DEFAULT 0,
+			expiring_soon_count INT NOT NULL DEFAULT 0,
+			expired_count INT NOT NULL DEFAULT 0,
+			total_items INT NOT NULL DEFAULT 0,
+			total_stock INT NOT NULL DEFAULT 0,
+			inventory_value DOUBLE NOT NULL DEFAULT 0,
+			low_stock_count INT NOT NULL DEFAULT 0,
+			golongan_stats JSON DEFAULT NULL,
+			golongan_values JSON DEFAULT NULL,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+		)
+	`)
+	SIK.Exec("ALTER TABLE monitoring_stock_summary ADD COLUMN golongan_stats JSON DEFAULT NULL")
+	SIK.Exec("ALTER TABLE monitoring_stock_summary ADD COLUMN golongan_values JSON DEFAULT NULL")
+
 	// Initial refresh
 	RefreshStockMovementSummary()
 	RefreshStockHistorySummaryIfEmpty()
+	RefreshMonitoringSummary()
 	SeedBatchNumbers()
 
 	fmt.Println("Database connected")
@@ -315,8 +364,153 @@ DatabaseConnected:
 		defer ticker.Stop()
 		for range ticker.C {
 			RefreshStockMovementSummary()
+			RefreshMonitoringSummary()
 		}
 	}()
+}
+
+// RefreshMonitoringSummary pre-computes dashboard + monitoring stock aggregates.
+// All these queries run in parallel against MySQL once, cached in 1 row.
+// Without this, every page load runs 8+ queries over Tailscale (200ms each).
+func RefreshMonitoringSummary() {
+	type summaryRow struct {
+		Critical int64
+		Restock  int64
+	}
+	var row summaryRow
+	SIK.Raw(`
+		SELECT
+			COALESCE(SUM(IF(COALESCE(gs.total_stok, 0) < 20, 1, 0)), 0) AS critical,
+			COALESCE(SUM(IF(COALESCE(gs.total_stok, 0) >= 20 AND COALESCE(gs.total_stok, 0) < 50, 1, 0)), 0) AS restock
+		FROM databarang
+		LEFT JOIN (
+			SELECT kode_brng, SUM(stok) AS total_stok
+			FROM gudangbarang WHERE kd_bangsal = 'AP' AND stok > 0
+			GROUP BY kode_brng
+		) gs ON databarang.kode_brng = gs.kode_brng
+	`).Scan(&row)
+
+	type expireRow struct {
+		ExpiringSoon int64
+		Expired      int64
+	}
+	var exp expireRow
+	SIK.Raw(`
+		SELECT
+			SUM(CASE WHEN expire BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END) AS expiring_soon,
+			SUM(CASE WHEN expire < CURDATE() THEN 1 ELSE 0 END) AS expired
+		FROM databarang
+		WHERE expire IS NOT NULL AND expire != '' AND expire != '0000-00-00'
+			AND expire >= '1990-01-01' AND expire <= DATE_ADD(CURDATE(), INTERVAL 15 YEAR)
+	`).Scan(&exp)
+
+	type dashRow struct {
+		TotalItems    int64
+		TotalStock    int64
+		InventoryVal  float64
+		LowStockCount int64
+	}
+	var dash dashRow
+	SIK.Raw(`
+		SELECT
+			COUNT(DISTINCT databarang.kode_brng) AS total_items,
+			COALESCE(SUM(gs.total_stok), 0) AS total_stock,
+			COALESCE(SUM(gs.total_stok * databarang.h_beli), 0) AS inventory_val,
+			COALESCE(SUM(IF(COALESCE(gs.total_stok, 0) <= 50, 1, 0)), 0) AS low_stock_count
+		FROM databarang
+		LEFT JOIN (
+			SELECT kode_brng, SUM(stok) AS total_stok
+			FROM gudangbarang WHERE kd_bangsal = 'AP' AND stok > 0
+			GROUP BY kode_brng
+		) gs ON databarang.kode_brng = gs.kode_brng
+	`).Scan(&dash)
+
+	SIK.Exec(`
+		INSERT INTO monitoring_stock_summary (id, critical_stock_count, restock_needed_count,
+			expiring_soon_count, expired_count, total_items, total_stock, inventory_value, low_stock_count)
+		VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+			critical_stock_count = VALUES(critical_stock_count),
+			restock_needed_count = VALUES(restock_needed_count),
+			expiring_soon_count = VALUES(expiring_soon_count),
+			expired_count = VALUES(expired_count),
+			total_items = VALUES(total_items),
+			total_stock = VALUES(total_stock),
+			inventory_value = VALUES(inventory_value),
+			low_stock_count = VALUES(low_stock_count),
+			updated_at = NOW()
+	`, row.Critical, row.Restock, exp.ExpiringSoon, exp.Expired, dash.TotalItems, dash.TotalStock, dash.InventoryVal, dash.LowStockCount)
+
+	// Pre-compute golongan stats and values — store as JSON
+	type golStat struct {
+		Golongan   string
+		TotalStock int64
+	}
+	var gstats []golStat
+	SIK.Raw(`
+		SELECT COALESCE(golongan_barang.nama, 'Tidak Diketahui') AS golongan,
+			CAST(COALESCE(SUM(gs.total_stok), 0) AS SIGNED) AS total_stock
+		FROM databarang
+		LEFT JOIN (
+			SELECT kode_brng, SUM(stok) AS total_stok
+			FROM gudangbarang WHERE kd_bangsal = 'AP' AND stok > 0
+			GROUP BY kode_brng
+		) gs ON databarang.kode_brng = gs.kode_brng
+		LEFT JOIN golongan_barang ON databarang.kode_golongan = golongan_barang.kode
+		WHERE COALESCE(gs.total_stok, 0) > 0
+		GROUP BY golongan_barang.nama
+		ORDER BY total_stock DESC LIMIT 20
+	`).Scan(&gstats)
+
+	type golVal struct {
+		Golongan       string
+		ItemCount      int64
+		TotalStock     int64
+		InventoryValue float64
+	}
+	var gvals []golVal
+	SIK.Raw(`
+		SELECT COALESCE(golongan_barang.nama, 'Tidak Diketahui') AS golongan,
+			COUNT(DISTINCT databarang.kode_brng) AS item_count,
+			CAST(COALESCE(SUM(gs.total_stok), 0) AS SIGNED) AS total_stock,
+			COALESCE(SUM(gs.total_stok * databarang.h_beli), 0) AS inventory_value
+		FROM databarang
+		LEFT JOIN (
+			SELECT kode_brng, SUM(stok) AS total_stok
+			FROM gudangbarang WHERE kd_bangsal = 'AP' AND stok > 0
+			GROUP BY kode_brng
+		) gs ON databarang.kode_brng = gs.kode_brng
+		LEFT JOIN golongan_barang ON databarang.kode_golongan = golongan_barang.kode
+		WHERE COALESCE(gs.total_stok, 0) > 0
+		GROUP BY golongan_barang.nama
+		ORDER BY inventory_value DESC LIMIT 20
+	`).Scan(&gvals)
+
+	// Build JSON strings to insert into MySQL JSON columns
+	golStatsJSON := "["
+	for i, s := range gstats {
+		if i > 0 {
+			golStatsJSON += ","
+		}
+		golStatsJSON += fmt.Sprintf(`{"golongan":"%s","total_stock":%d}`, s.Golongan, s.TotalStock)
+	}
+	golStatsJSON += "]"
+
+	golValsJSON := "["
+	for i, v := range gvals {
+		if i > 0 {
+			golValsJSON += ","
+		}
+		golValsJSON += fmt.Sprintf(`{"golongan":"%s","item_count":%d,"total_stock":%d,"inventory_value":%.2f}`, v.Golongan, v.ItemCount, v.TotalStock, v.InventoryValue)
+	}
+	golValsJSON += "]"
+
+	SIK.Exec(`
+		UPDATE monitoring_stock_summary SET
+			golongan_stats = ?, golongan_values = ?,
+			updated_at = NOW()
+		WHERE id = 1
+	`, golStatsJSON, golValsJSON)
 }
 
 func RefreshStockHistorySummaryIfEmpty() {

@@ -5,6 +5,7 @@ export interface DashboardSummary {
   expiring_soon_count: number;
   expired_count: number;
   inventory_value: number;
+  stock_change_percent?: number;
 }
 
 export interface DashboardDistribution {

@@ -4,6 +4,7 @@ import (
 	"backend/config"
 	"backend/models"
 	"strings"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 )
@@ -43,36 +44,27 @@ func GetMasters(c *gin.Context) {
 	var golongan []map[string]interface{}
 	var suppliers []models.Supplier
 
-	config.SIK.
-		Table("industrifarmasi").
-		Find(&suppliers)
+	var wg sync.WaitGroup
+	wg.Add(4)
 
-	config.SIK.
-		Table("kodesatuan").
-		Select(`
-			kode_sat,
-			satuan
-		`).
-		Order("satuan").
-		Find(&satuan)
+	go func() {
+		defer wg.Done()
+		config.SIK.Table("industrifarmasi").Find(&suppliers)
+	}()
+	go func() {
+		defer wg.Done()
+		config.SIK.Table("kodesatuan").Select("kode_sat, satuan").Order("satuan").Find(&satuan)
+	}()
+	go func() {
+		defer wg.Done()
+		config.SIK.Table("jenis").Select("kdjns, nama").Order("nama").Find(&jenis)
+	}()
+	go func() {
+		defer wg.Done()
+		config.SIK.Table("golongan_barang").Select("kode, nama").Order("nama").Find(&golongan)
+	}()
 
-	config.SIK.
-		Table("jenis").
-		Select(`
-			kdjns,
-			nama
-		`).
-		Order("nama").
-		Find(&jenis)
-
-	config.SIK.
-		Table("golongan_barang").
-		Select(`
-			kode,
-			nama
-		`).
-		Order("nama").
-		Find(&golongan)
+	wg.Wait()
 
 	c.JSON(200, gin.H{
 		"golongan":  golongan,
