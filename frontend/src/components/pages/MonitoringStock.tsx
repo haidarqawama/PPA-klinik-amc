@@ -48,13 +48,7 @@ function formatExpireDays(daysLeft: number, isExpired: boolean): string {
 }
 
 function formatCurrency(value: number): string {
-  if (value >= 1_000_000) {
-    return `Rp ${(value / 1_000_000).toFixed(1)}M`;
-  }
-  if (value >= 1_000) {
-    return `Rp ${(value / 1_000).toFixed(0)}K`;
-  }
-  return `Rp ${formatNumber(value)}`;
+  return `Rp${formatNumber(value)}`;
 }
 
 function getTurnoverStatus(ratio: number): { label: string; className: string } {
@@ -805,6 +799,9 @@ export default function MonitoringStock() {
                           ) : (
                             <>
                               <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                Batch
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                                 Tanggal Expire
                               </th>
                               <th className="px-6 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -882,6 +879,9 @@ export default function MonitoringStock() {
                               </td>
                               <td className="px-6 py-3.5 font-medium text-foreground">
                                 {item.nama_brng}
+                              </td>
+                              <td className="px-6 py-3.5 text-muted-foreground font-mono text-xs">
+                                {item.batch || '-'}
                               </td>
                               <td className="px-6 py-3.5 text-muted-foreground font-mono">
                                 {formatDate(item.expire)}
