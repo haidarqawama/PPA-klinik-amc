@@ -106,6 +106,8 @@ func GetRecentStockIn(c *gin.Context) {
 func GetStockInHistory(c *gin.Context) {
 	search := c.Query("search")
 	date := c.Query("date")
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
 	page := 1
 	limit := 100
 
@@ -122,7 +124,8 @@ func GetStockInHistory(c *gin.Context) {
 	}
 
 	// Check cache (skip for search queries since they're less predictable)
-	cacheKey := fmt.Sprintf("stockin:%d:%d:%s", page, limit, date)
+	// Include start_date and end_date in cache key for range queries
+	cacheKey := fmt.Sprintf("stockin:%d:%d:%s:%s", page, limit, startDate, endDate)
 	if search == "" {
 		stockInHistoryCacheMu.RLock()
 		if entry, ok := stockInHistoryCache[cacheKey]; ok && time.Since(entry.Timestamp) < stockHistoryCacheTTL {
@@ -140,7 +143,11 @@ func GetStockInHistory(c *gin.Context) {
 		// Fast count: no JOINs needed when no search
 		countQ := config.SIK.Table("riwayat_barang_medis").
 			Where("kd_bangsal = ? AND masuk > 0", "AP")
-		if date != "" {
+		// Use date range instead of single date
+		if startDate != "" && endDate != "" {
+			countQ = countQ.Where("tanggal BETWEEN ? AND ?", startDate, endDate)
+		} else if date != "" {
+			// Backward compatibility: single date
 			countQ = countQ.Where("tanggal = ?", date)
 		}
 		countQ.Count(&total)
@@ -149,7 +156,9 @@ func GetStockInHistory(c *gin.Context) {
 		likeSearch := "%" + search + "%"
 		countQ := config.SIK.Table("riwayat_barang_medis r").
 			Where("r.kd_bangsal = ? AND r.masuk > 0", "AP")
-		if date != "" {
+		if startDate != "" && endDate != "" {
+			countQ = countQ.Where("r.tanggal BETWEEN ? AND ?", startDate, endDate)
+		} else if date != "" {
 			countQ = countQ.Where("r.tanggal = ?", date)
 		}
 		countQ = countQ.Where(`
@@ -212,11 +221,15 @@ func GetStockInHistory(c *gin.Context) {
 		// No search: deferred join with covering index. Subquery does backward index
 		// scan, checks masuk > 0 from index, stops at 100. No sort, no table lookup.
 		baseWhere := "kd_bangsal = 'AP' AND masuk > 0"
-		if date != "" {
+		if startDate != "" && endDate != "" {
+			baseWhere += " AND tanggal BETWEEN ? AND ?"
+		} else if date != "" {
 			baseWhere += " AND tanggal = ?"
 		}
 		var args []interface{}
-		if date != "" {
+		if startDate != "" && endDate != "" {
+			args = append(args, startDate, endDate)
+		} else if date != "" {
 			args = append(args, date)
 		}
 		args = append(args, limit, offset)
@@ -247,7 +260,10 @@ func GetStockInHistory(c *gin.Context) {
 		likeSearch := "%" + search + "%"
 		baseWhere := "r.kd_bangsal = 'AP' AND r.masuk > 0"
 		var args []interface{}
-		if date != "" {
+		if startDate != "" && endDate != "" {
+			baseWhere += " AND r.tanggal BETWEEN ? AND ?"
+			args = append(args, startDate, endDate)
+		} else if date != "" {
 			baseWhere += " AND r.tanggal = ?"
 			args = append(args, date)
 		}

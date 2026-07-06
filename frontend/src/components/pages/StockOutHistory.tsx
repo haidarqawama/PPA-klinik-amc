@@ -32,6 +32,9 @@ const readApiResponse = async (response: Response) => {
 export default function StockOutHistory() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
+  const [selectedDateEnd, setSelectedDateEnd] = useState("");
+  const [dateRangeLabel, setDateRangeLabel] = useState("");
+  const [dateTemplate, setDateTemplate] = useState("custom");
   const [history, setHistory] = useState<StockOutHistoryItem[]>([]);
   const [page, setPage] = useState(1);
   const [totalRows, setTotalRows] = useState(0);
@@ -51,7 +54,27 @@ export default function StockOutHistory() {
       params.set("search", searchQuery.trim());
     }
 
-    if (selectedDate) {
+    // Handle date range
+    if (dateTemplate !== "custom" && dateTemplate !== "") {
+      const today = new Date();
+      let s: Date;
+      let e: Date = new Date(today);
+
+      switch (dateTemplate) {
+        case "today":      s = new Date(today); break;
+        case "7days":      s = new Date(today); s.setDate(today.getDate() - 6); break;
+        case "30days":     s = new Date(today); s.setDate(today.getDate() - 29); break;
+        case "thismonth":  s = new Date(today.getFullYear(), today.getMonth(), 1); break;
+        case "lastmonth":  s = new Date(today.getFullYear(), today.getMonth() - 1, 1); e = new Date(today.getFullYear(), today.getMonth(), 0); break;
+        default:           s = new Date(today); break;
+      }
+
+      params.set("start_date", s.toISOString().split('T')[0]);
+      params.set("end_date", e.toISOString().split('T')[0]);
+    } else if (selectedDate && selectedDateEnd) {
+      params.set("start_date", selectedDate);
+      params.set("end_date", selectedDateEnd);
+    } else if (selectedDate) {
       params.set("date", selectedDate);
     }
 
@@ -91,7 +114,7 @@ export default function StockOutHistory() {
         setLoading(false);
       }
     }
-  }, [page, searchQuery, selectedDate]);
+  }, [page, searchQuery, selectedDate, selectedDateEnd]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -171,56 +194,137 @@ export default function StockOutHistory() {
       </div>
 
       <div className="bg-card rounded-2xl border border-border p-6">
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_240px_auto] gap-4 items-end">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-start">
           <div>
             <label className="block text-sm mb-2">Cari Barang / Petugas / Tujuan</label>
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="Nama barang, kode, barcode, petugas, tujuan..."
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Nama barang, kode, barcode, petugas, tujuan..."
+                  value={searchQuery}
+                  onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
+                  className="w-full pl-12 pr-4 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("");
+                  setSelectedDate("");
+                  setSelectedDateEnd("");
+                  setDateTemplate("custom");
+                  setDateRangeLabel("");
                   setPage(1);
                 }}
-                className="w-full pl-12 pr-4 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
-              />
+                className="h-12 px-4 rounded-xl border border-destructive/30 bg-destructive/5 hover:bg-destructive/10 text-destructive transition-colors text-sm flex items-center justify-center gap-2 shrink-0"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Reset
+              </button>
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm mb-2">Filter Tanggal</label>
-            <div className="relative">
-              <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-              <input
-                type="date"
-                min="2000-01-01"
-                max="2100-12-31"
-                value={selectedDate}
+          <div className="flex flex-wrap gap-4 items-end">
+            <div className="min-w-[320px] flex-1">
+              <label className="block text-sm mb-2">Filter Tanggal (dari - sampai)</label>
+              <div className="flex gap-2 items-center">
+                <div className="relative flex-1">
+                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <input
+                    type="date"
+                    min="2000-01-01"
+                    max="2100-12-31"
+                    value={selectedDate}
+                    onChange={(e) => { setSelectedDate(e.target.value); setDateTemplate("custom"); setPage(1); }}
+                    className="w-full pl-12 pr-4 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+                <span className="text-muted-foreground">-</span>
+                <div className="relative flex-1">
+                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <input
+                    type="date"
+                    min="2000-01-01"
+                    max="2100-12-31"
+                    value={selectedDateEnd}
+                    onChange={(e) => { setSelectedDateEnd(e.target.value); setDateTemplate("custom"); setPage(1); }}
+                    className="w-full pl-12 pr-4 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="min-w-[200px]">
+              <label className="block text-sm mb-2">Template Cepat</label>
+              <select
+                value={dateTemplate}
                 onChange={(e) => {
-                  setSelectedDate(e.target.value);
-                  setPage(1);
+                  const val = e.target.value;
+                  if (val === "custom") {
+                    setDateTemplate("custom");
+                    setDateRangeLabel("");
+                  } else {
+                    const today = new Date();
+                    let s, e, label;
+                    const fmt = (d: Date) => {
+                      const y = d.getFullYear();
+                      const m = String(d.getMonth() + 1).padStart(2, '0');
+                      const day = String(d.getDate()).padStart(2, '0');
+                      return `${y}-${m}-${day}`;
+                    };
+                    switch (val) {
+                      case "today":
+                        s = new Date(today); e = new Date(today);
+                        label = `Hari Ini (${fmt(s)})`;
+                        break;
+                      case "7days":
+                        s = new Date(today); s.setDate(today.getDate() - 6); e = new Date(today);
+                        label = `7 Hari Terakhir (${fmt(s)} - ${fmt(e)})`;
+                        break;
+                      case "30days":
+                        s = new Date(today); s.setDate(today.getDate() - 29); e = new Date(today);
+                        label = `30 Hari Terakhir (${fmt(s)} - ${fmt(e)})`;
+                        break;
+                      case "thismonth":
+                        s = new Date(today.getFullYear(), today.getMonth(), 1);
+                        e = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+                        label = `Bulan Ini (${fmt(s)} - ${fmt(e)})`;
+                        break;
+                      case "lastmonth":
+                        s = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+                        e = new Date(today.getFullYear(), today.getMonth(), 0);
+                        label = `Bulan Lalu (${fmt(s)} - ${fmt(e)})`;
+                        break;
+                      default: s = new Date(today); e = new Date(today); label = "";
+                    }
+                    setSelectedDate(fmt(s));
+                    setSelectedDateEnd(fmt(e));
+                    setDateTemplate(val);
+                    setDateRangeLabel(label);
+                    setPage(1);
+                  }
                 }}
-                className="w-full pl-12 pr-4 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
-              />
+                className="w-full pl-4 pr-10 py-3 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+              >
+                <option value="custom">Rentang Khusus (pilih manual)</option>
+                <option value="today">Hari Ini</option>
+                <option value="7days">7 Hari Terakhir</option>
+                <option value="30days">30 Hari Terakhir</option>
+                <option value="thismonth">Bulan Ini</option>
+                <option value="lastmonth">Bulan Lalu</option>
+              </select>
             </div>
           </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              setSearchQuery("");
-              setSelectedDate("");
-              setPage(1);
-            }}
-            className="h-12 px-4 rounded-xl border border-border hover:bg-muted/50 transition-colors text-sm flex items-center justify-center gap-2"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Reset
-          </button>
         </div>
       </div>
+
+      {dateRangeLabel && (
+        <div className="px-4 py-2 bg-primary/5 border border-primary/20 rounded-xl text-sm text-primary text-center">
+          {dateRangeLabel}
+        </div>
+      )}
 
       <div className="bg-card rounded-2xl border border-border shadow-sm">
         <div className="overflow-x-auto overflow-y-auto max-h-[90vh]">

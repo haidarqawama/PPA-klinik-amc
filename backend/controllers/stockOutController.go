@@ -182,6 +182,8 @@ func GetRecentStockOut(c *gin.Context) {
 
 func GetStockOutHistory(c *gin.Context) {
 	search := c.Query("search")
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
 	date := c.Query("date")
 	page := 1
 	limit := 100
@@ -199,7 +201,7 @@ func GetStockOutHistory(c *gin.Context) {
 	}
 
 	// Check cache (skip for search queries)
-	cacheKey := fmt.Sprintf("stockout:%d:%d:%s", page, limit, date)
+	cacheKey := fmt.Sprintf("stockout:%d:%d:%s:%s", page, limit, startDate, endDate)
 	if search == "" {
 		stockOutHistoryCacheMu.RLock()
 		if entry, ok := stockOutHistoryCache[cacheKey]; ok && time.Since(entry.Timestamp) < stockHistoryCacheTTL {
@@ -286,7 +288,10 @@ func GetStockOutHistory(c *gin.Context) {
 		// No search: deferred join with covering index.
 		baseWhere := "kd_bangsal = 'AP' AND keluar > 0"
 		var args []interface{}
-		if date != "" {
+		if startDate != "" && endDate != "" {
+			baseWhere += " AND tanggal BETWEEN ? AND ?"
+			args = append(args, startDate, endDate)
+		} else if date != "" {
 			baseWhere += " AND tanggal = ?"
 			args = append(args, date)
 		}
@@ -318,7 +323,10 @@ func GetStockOutHistory(c *gin.Context) {
 		likeSearch := "%" + search + "%"
 		baseWhere := "r.kd_bangsal = 'AP' AND r.keluar > 0"
 		var args []interface{}
-		if date != "" {
+		if startDate != "" && endDate != "" {
+			baseWhere += " AND r.tanggal BETWEEN ? AND ?"
+			args = append(args, startDate, endDate)
+		} else if date != "" {
 			baseWhere += " AND r.tanggal = ?"
 			args = append(args, date)
 		}
