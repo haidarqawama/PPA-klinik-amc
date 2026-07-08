@@ -1,6 +1,6 @@
 const API_PORT = process.env.NEXT_PUBLIC_API_PORT || "8080";
 
-const CAPACITOR_API_URL = "http://172.20.10.2:8080";
+const CAPACITOR_API_URL = "http://192.168.0.101:8080";
 
 export function getApiBaseUrl(): string {
   // Capacitor/APK mode: use hardcoded server IP

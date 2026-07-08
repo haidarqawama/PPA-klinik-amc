@@ -12,7 +12,8 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const [error, setError] = useState<string | null>(null);
   const onScanRef = useRef(onScan);
   const onCloseRef = useRef(onClose);
-  const cleanRef = useRef(false);
+  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     onScanRef.current = onScan;
@@ -20,45 +21,56 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   });
 
   useEffect(() => {
+    const reader = new BrowserMultiFormatReader();
+    readerRef.current = reader;
     const video = videoRef.current;
     if (!video) return;
 
-    const reader = new BrowserMultiFormatReader();
-
     reader.decodeFromVideoDevice(null, video, (result) => {
-      if (result && !cleanRef.current) {
-        cleanRef.current = true;
-        try { reader.reset(); } catch {}
-        // Stop all video tracks
-        if (video.srcObject) {
-          (video.srcObject as MediaStream).getTracks().forEach(t => t.stop());
-          video.srcObject = null;
-        }
+      if (result) {
+        reader.reset();
         onScanRef.current(result.getText());
         onCloseRef.current();
       }
-    }).catch(err => {
-      if (err?.name !== 'NotFoundException') {
-        setError('Gagal mengakses kamera. Pastikan izin kamera diberikan.');
-      }
     });
 
+    const capture = setInterval(() => {
+      if (video.srcObject) {
+        streamRef.current = video.srcObject as MediaStream;
+        clearInterval(capture);
+      }
+    }, 50);
+    setTimeout(() => clearInterval(capture), 3000);
+
     return () => {
-      cleanRef.current = true;
-      try { reader.reset(); } catch {}
+      reader.reset();
+      readerRef.current = null;
       if (video.srcObject) {
         (video.srcObject as MediaStream).getTracks().forEach(t => t.stop());
         video.srcObject = null;
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
       }
     };
   }, []);
 
   const handleClose = () => {
-    cleanRef.current = true;
+    readerRef.current?.reset();
+    readerRef.current = null;
     const video = videoRef.current;
-    if (video && video.srcObject) {
-      (video.srcObject as MediaStream).getTracks().forEach(t => t.stop());
-      video.srcObject = null;
+    if (video) {
+      video.pause();
+      video.style.display = 'none';
+      if (video.srcObject) {
+        (video.srcObject as MediaStream).getTracks().forEach(t => t.stop());
+        video.srcObject = null;
+      }
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
     }
     onClose();
   };
