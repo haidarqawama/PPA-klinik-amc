@@ -12,6 +12,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const [error, setError] = useState<string | null>(null);
   const onScanRef = useRef(onScan);
   const onCloseRef = useRef(onClose);
+  const cleanRef = useRef(false);
 
   useEffect(() => {
     onScanRef.current = onScan;
@@ -19,19 +20,23 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   });
 
   useEffect(() => {
-    const reader = new BrowserMultiFormatReader();
     const video = videoRef.current;
     if (!video) return;
 
-    // decodeFromVideoDevice already scans continuously — call once
+    const reader = new BrowserMultiFormatReader();
+
     reader.decodeFromVideoDevice(null, video, (result) => {
-      if (result) {
-        // Stop decode loop immediately to prevent console spam
-        reader.reset();
+      if (result && !cleanRef.current) {
+        cleanRef.current = true;
+        try { reader.reset(); } catch {}
+        // Stop all video tracks
+        if (video.srcObject) {
+          (video.srcObject as MediaStream).getTracks().forEach(t => t.stop());
+          video.srcObject = null;
+        }
         onScanRef.current(result.getText());
         onCloseRef.current();
       }
-      // NotFoundException per frame — normal, abaikan
     }).catch(err => {
       if (err?.name !== 'NotFoundException') {
         setError('Gagal mengakses kamera. Pastikan izin kamera diberikan.');
@@ -39,15 +44,30 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     });
 
     return () => {
-      reader.reset();
+      cleanRef.current = true;
+      try { reader.reset(); } catch {}
+      if (video.srcObject) {
+        (video.srcObject as MediaStream).getTracks().forEach(t => t.stop());
+        video.srcObject = null;
+      }
     };
   }, []);
+
+  const handleClose = () => {
+    cleanRef.current = true;
+    const video = videoRef.current;
+    if (video && video.srcObject) {
+      (video.srcObject as MediaStream).getTracks().forEach(t => t.stop());
+      video.srcObject = null;
+    }
+    onClose();
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
       <div className="bg-card w-full max-w-md rounded-2xl p-6 relative">
         <button
-          onClick={onClose}
+          onClick={handleClose}
           className="absolute right-4 top-4 p-2 rounded-full hover:bg-muted"
         >
           <X className="w-6 h-6" />

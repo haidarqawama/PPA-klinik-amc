@@ -262,6 +262,19 @@ DatabaseConnected:
 		"CREATE INDEX idx_rbm_count_fast ON riwayat_barang_medis (kd_bangsal, keluar, masuk)",
 	)
 
+	// idx_rbm_stockin_count: Fast COUNT for stock-in history (masuk)
+	ensureIndex(
+		"riwayat_barang_medis",
+		"idx_rbm_stockin_count",
+		"CREATE INDEX idx_rbm_stockin_count ON riwayat_barang_medis (kd_bangsal, masuk, tanggal)",
+	)
+	// idx_rbm_stockout_count: Fast COUNT for stock-out history (keluar)
+	ensureIndex(
+		"riwayat_barang_medis",
+		"idx_rbm_stockout_count",
+		"CREATE INDEX idx_rbm_stockout_count ON riwayat_barang_medis (kd_bangsal, keluar, tanggal)",
+	)
+
 	ensureIndex(
 		"barcode_obat",
 		"idx_barcode_obat_lookup",

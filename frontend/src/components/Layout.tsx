@@ -1,7 +1,5 @@
 'use client'
 
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
   Package,
@@ -14,15 +12,27 @@ import {
   Menu,
   X
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export function Layout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [activeHref, setActiveHref] = useState("");
+
+  useEffect(() => {
+    const p = window.location.pathname.replace(/\/$/, "") || "/";
+    setActiveHref(p);
+  }, []);
+
+  function isActive(href: string): boolean {
+    if (!activeHref) return false;
+    const h = href.replace(/\/$/, "") || "/";
+    if (h === "/") return activeHref === "/";
+    return activeHref.startsWith(h);
+  }
 
   const navigation = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -56,25 +66,22 @@ export function Layout({
           <nav className="flex flex-1 flex-col">
             <ul className="flex flex-1 flex-col gap-y-1">
               {navigation.map((item) => {
-                const isActive =
-                item.href === '/'
-                  ? pathname === '/'
-                  : pathname.startsWith(item.href)
+                const active = isActive(item.href);
                 return (
                   <li key={item.name}>
-                    <Link
+                    <a
                       href={item.href}
                       className={`
                         group flex gap-x-3 rounded-xl px-4 py-3 transition-all duration-200
-                        ${isActive
+                        ${active
                           ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
                           : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
                         }
                       `}
                     >
-                      <item.icon className={`h-5 w-5 shrink-0 ${isActive ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
+                      <item.icon className={`h-5 w-5 shrink-0 ${active ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
                       {item.name}
-                    </Link>
+                    </a>
                   </li>
                 );
               })}
@@ -125,23 +132,23 @@ export function Layout({
             </div>
             <nav className="flex flex-col gap-y-1">
               {navigation.map((item) => {
-                const isActive = location.pathname === item.href;
+                const active = isActive(item.href);
                 return (
-                  <Link
+                  <a
                     key={item.name}
                     href={item.href}
                     onClick={() => setMobileMenuOpen(false)}
                     className={`
                       flex gap-x-3 rounded-xl px-4 py-3 transition-all duration-200
-                      ${isActive
+                      ${active
                         ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
                         : 'text-sidebar-foreground hover:bg-sidebar-accent'
                       }
                     `}
                   >
-                    <item.icon className={`h-5 w-5 ${isActive ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
+                    <item.icon className={`h-5 w-5 ${active ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
                     {item.name}
-                  </Link>
+                  </a>
                 );
               })}
             </nav>

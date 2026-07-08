@@ -2,7 +2,6 @@
 
 import axios from "axios";
 import { useState, useEffect } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Package, Barcode, Calendar, Hash, ArrowLeft } from "lucide-react";
 import { apiUrl } from "@/lib/api";
 import type { Masters } from "@/types/master";
@@ -27,10 +26,8 @@ const formatStock = (value: string) => {
 };
 
 export default function EditItem() {
-  const router = useRouter();
-  const params = useParams();
-  const searchParams = useSearchParams();
-  const kodeBrng = params.kodeBrng as string;
+  const searchParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
+  const kodeBrng = searchParams.get("kodeBrng") ?? "";
   const urlNoBatch = searchParams.get("no_batch") || "";
   const urlNoFaktur = searchParams.get("no_faktur") || "";
 
@@ -166,7 +163,7 @@ export default function EditItem() {
         setMessage("✅ Barang berhasil diperbarui");
       
         setTimeout(() => {
-          router.push("/inventory");
+          window.location.href = "/inventory";
         }, 1500);
       
       } catch (err) {
@@ -242,7 +239,7 @@ export default function EditItem() {
       )}
       <div className="flex items-center gap-4">
         <button
-          onClick={() => router.push("/inventory")}
+          onClick={() => window.location.href = "/inventory"}
           className="p-2 rounded-xl hover:bg-muted/50 transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />
@@ -621,7 +618,7 @@ export default function EditItem() {
           <div className="flex gap-4 pt-4">
             <button
               type="button"
-              onClick={() => router.push("/inventory")}
+              onClick={() => window.location.href = "/inventory"}
               className="flex-1 py-3 px-6 rounded-xl border border-border hover:bg-muted/50 transition-colors"
             >
               Batal

@@ -416,7 +416,7 @@ export default function Inventory() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <div className="flex gap-2">
                       <Link
-                        href={`/inventory/edit/${item.kode_brng}?no_batch=${encodeURIComponent(item.no_batch || '')}&no_faktur=${encodeURIComponent(item.no_faktur || '')}`}
+                        href={`/inventory/edit?kodeBrng=${encodeURIComponent(item.kode_brng)}&no_batch=${encodeURIComponent(item.no_batch || '')}&no_faktur=${encodeURIComponent(item.no_faktur || '')}`}
                         className="p-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
                       >
                         <Edit className="w-4 h-4" />

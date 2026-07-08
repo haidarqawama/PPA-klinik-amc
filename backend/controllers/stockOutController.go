@@ -20,6 +20,8 @@ var (
 type stockOutHistoryCacheEntry struct {
 	Total     int64
 	Rows      []models.StockOutHistory
+	TotalQty  float64
+	TotalVal  float64
 	Timestamp time.Time
 }
 
@@ -206,7 +208,7 @@ func GetStockOutHistory(c *gin.Context) {
 		stockOutHistoryCacheMu.RLock()
 		if entry, ok := stockOutHistoryCache[cacheKey]; ok && time.Since(entry.Timestamp) < stockHistoryCacheTTL {
 			stockOutHistoryCacheMu.RUnlock()
-			c.JSON(200, gin.H{"total": entry.Total, "data": entry.Rows})
+			c.JSON(200, gin.H{"total": entry.Total, "data": entry.Rows, "total_qty": entry.TotalQty, "total_value": entry.TotalVal})
 			return
 		}
 		stockOutHistoryCacheMu.RUnlock()
@@ -217,7 +219,9 @@ func GetStockOutHistory(c *gin.Context) {
 		// Fast count: no JOINs needed when no search
 		countQ := config.SIK.Table("riwayat_barang_medis").
 			Where("kd_bangsal = ? AND keluar > 0", "AP")
-		if date != "" {
+		if startDate != "" && endDate != "" {
+			countQ = countQ.Where("tanggal BETWEEN ? AND ?", startDate, endDate)
+		} else if date != "" {
 			countQ = countQ.Where("tanggal = ?", date)
 		}
 		countQ.Count(&total)
@@ -226,7 +230,9 @@ func GetStockOutHistory(c *gin.Context) {
 		likeSearch := "%" + search + "%"
 		countQ := config.SIK.Table("riwayat_barang_medis r").
 			Where("r.kd_bangsal = ? AND r.keluar > 0", "AP")
-		if date != "" {
+		if startDate != "" && endDate != "" {
+			countQ = countQ.Where("r.tanggal BETWEEN ? AND ?", startDate, endDate)
+		} else if date != "" {
 			countQ = countQ.Where("r.tanggal = ?", date)
 		}
 		countQ = countQ.Where(`
@@ -241,7 +247,7 @@ func GetStockOutHistory(c *gin.Context) {
 	}
 
 	var summary models.StockOutHistorySummary
-	if err := stockOutHistorySummaryQuery(search, date).Scan(&summary).Error; err != nil {
+	if err := stockOutHistorySummaryQuery(search, date, startDate, endDate).Scan(&summary).Error; err != nil {
 		c.JSON(500, gin.H{"error": "Gagal menghitung total riwayat barang keluar", "detail": err.Error()})
 		return
 	}
@@ -365,7 +371,7 @@ func GetStockOutHistory(c *gin.Context) {
 	// Cache non-search results
 	if search == "" {
 		stockOutHistoryCacheMu.Lock()
-		stockOutHistoryCache[cacheKey] = stockOutHistoryCacheEntry{Total: total, Rows: rows, Timestamp: time.Now()}
+		stockOutHistoryCache[cacheKey] = stockOutHistoryCacheEntry{Total: total, Rows: rows, TotalQty: summary.TotalQty, TotalVal: summary.TotalValue, Timestamp: time.Now()}
 		stockOutHistoryCacheMu.Unlock()
 	}
 
@@ -458,9 +464,9 @@ func AddStockOut(c *gin.Context) {
 	})
 }
 
-func stockOutHistorySummaryQuery(search string, date string) *gorm.DB {
+func stockOutHistorySummaryQuery(search string, date string, startDate string, endDate string) *gorm.DB {
 	// No search, no date: read from pre-computed summary table (<1ms)
-	if search == "" && date == "" {
+	if search == "" && date == "" && startDate == "" && endDate == "" {
 		return config.SIK.Table("stock_history_summary").
 			Select("total_qty_out AS total_qty, total_value_out AS total_value")
 	}
@@ -475,7 +481,9 @@ func stockOutHistorySummaryQuery(search string, date string) *gorm.DB {
 			Where("r.kd_bangsal = 'AP'").
 			Where("r.keluar > 0")
 
-		if date != "" {
+		if startDate != "" && endDate != "" {
+			subQ = subQ.Where("r.tanggal BETWEEN ? AND ?", startDate, endDate)
+		} else if date != "" {
 			subQ = subQ.Where("r.tanggal = ?", date)
 		}
 
@@ -521,7 +529,9 @@ func stockOutHistorySummaryQuery(search string, date string) *gorm.DB {
 		OR EXISTS (SELECT 1 FROM barcode_obat WHERE barcode_obat.kode_brng = r.kode_brng AND COALESCE(r.no_batch, '') = barcode_obat.no_batch AND COALESCE(r.no_faktur, '') = barcode_obat.no_faktur AND barcode_obat.barcode LIKE ?)
 	`, likeSearch, likeSearch, likeSearch, likeSearch, likeSearch, likeSearch)
 
-	if date != "" {
+	if startDate != "" && endDate != "" {
+		query = query.Where("r.tanggal BETWEEN ? AND ?", startDate, endDate)
+	} else if date != "" {
 		query = query.Where("r.tanggal = ?", date)
 	}
 

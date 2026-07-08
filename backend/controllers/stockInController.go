@@ -22,6 +22,8 @@ var (
 type stockInHistoryCacheEntry struct {
 	Total     int64
 	Rows      []models.StockInHistory
+	TotalQty  float64
+	TotalVal  float64
 	Timestamp time.Time
 }
 
@@ -130,7 +132,7 @@ func GetStockInHistory(c *gin.Context) {
 		stockInHistoryCacheMu.RLock()
 		if entry, ok := stockInHistoryCache[cacheKey]; ok && time.Since(entry.Timestamp) < stockHistoryCacheTTL {
 			stockInHistoryCacheMu.RUnlock()
-			c.JSON(200, gin.H{"total": entry.Total, "data": entry.Rows})
+			c.JSON(200, gin.H{"total": entry.Total, "data": entry.Rows, "total_qty": entry.TotalQty, "total_value": entry.TotalVal})
 			return
 		}
 		stockInHistoryCacheMu.RUnlock()
@@ -172,7 +174,7 @@ func GetStockInHistory(c *gin.Context) {
 	}
 
 	var summary models.StockInSummary
-	if err := stockInHistorySummaryQuery(search, date).Scan(&summary).Error; err != nil {
+	if err := stockInHistorySummaryQuery(search, date, startDate, endDate).Scan(&summary).Error; err != nil {
 		c.JSON(500, gin.H{"error": "Gagal menghitung total riwayat barang masuk", "detail": err.Error()})
 		return
 	}
@@ -301,7 +303,7 @@ func GetStockInHistory(c *gin.Context) {
 	// Cache non-search results
 	if search == "" {
 		stockInHistoryCacheMu.Lock()
-		stockInHistoryCache[cacheKey] = stockInHistoryCacheEntry{Total: total, Rows: rows, Timestamp: time.Now()}
+		stockInHistoryCache[cacheKey] = stockInHistoryCacheEntry{Total: total, Rows: rows, TotalQty: summary.TotalQty, TotalVal: summary.TotalValue, Timestamp: time.Now()}
 		stockInHistoryCacheMu.Unlock()
 	}
 
@@ -316,9 +318,9 @@ func GetStockInHistory(c *gin.Context) {
 	})
 }
 
-func stockInHistorySummaryQuery(search string, date string) *gorm.DB {
+func stockInHistorySummaryQuery(search string, date string, startDate string, endDate string) *gorm.DB {
 	// No search, no date: read from pre-computed summary table (<1ms)
-	if search == "" && date == "" {
+	if search == "" && date == "" && startDate == "" && endDate == "" {
 		return config.SIK.Table("stock_history_summary").
 			Select("total_qty_in AS total_qty, total_value_in AS total_value")
 	}
@@ -333,7 +335,9 @@ func stockInHistorySummaryQuery(search string, date string) *gorm.DB {
 			Where("r.kd_bangsal = 'AP'").
 			Where("r.masuk > 0")
 
-		if date != "" {
+		if startDate != "" && endDate != "" {
+			subQ = subQ.Where("r.tanggal BETWEEN ? AND ?", startDate, endDate)
+		} else if date != "" {
 			subQ = subQ.Where("r.tanggal = ?", date)
 		}
 
@@ -371,7 +375,9 @@ func stockInHistorySummaryQuery(search string, date string) *gorm.DB {
 		OR EXISTS (SELECT 1 FROM barcode_obat WHERE barcode_obat.kode_brng = r.kode_brng AND COALESCE(r.no_batch, '') = barcode_obat.no_batch AND COALESCE(r.no_faktur, '') = barcode_obat.no_faktur AND barcode_obat.barcode LIKE ?)
 	`, likeSearch, likeSearch, likeSearch, likeSearch, likeSearch, likeSearch)
 
-	if date != "" {
+	if startDate != "" && endDate != "" {
+		query = query.Where("r.tanggal BETWEEN ? AND ?", startDate, endDate)
+	} else if date != "" {
 		query = query.Where("r.tanggal = ?", date)
 	}
 
