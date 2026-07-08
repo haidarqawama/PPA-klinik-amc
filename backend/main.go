@@ -42,16 +42,17 @@ func main() {
 			return
 		}
 
-		// Normalize path — always serve index.html from the directory
-		basePath := strings.TrimRight(c.Request.URL.Path, "/")
-		if basePath == "" {
-			basePath = "/"
-		}
-		fullPath := "../frontend/out" + basePath + "/index.html"
-		if _, err := os.Stat(fullPath); err == nil {
-			c.File(fullPath)
+		// Serve static file directly, else SPA fallback to index.html
+		directPath := "../frontend/out" + c.Request.URL.Path
+		if _, err := os.Stat(directPath); err == nil {
+			c.File(directPath)
 		} else {
-			c.File("../frontend/out/index.html")
+			spaPath := "../frontend/out" + strings.TrimRight(c.Request.URL.Path, "/") + "/index.html"
+			if _, err := os.Stat(spaPath); err == nil {
+				c.File(spaPath)
+			} else {
+				c.File("../frontend/out/index.html")
+			}
 		}
 		c.Abort()
 	})

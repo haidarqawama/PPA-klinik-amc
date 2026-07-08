@@ -5,9 +5,9 @@ const config: CapacitorConfig = {
   appName: 'AMC Inventory System',
   webDir: 'out',
   server: {
+    url: 'http://192.168.0.101:8080',
     androidScheme: 'http',
     cleartext: true,
-    hostname: 'app.local',
     allowNavigation: ['*'],
   },
   plugins: {
