@@ -130,6 +130,8 @@ export default function EditItem() {
     return () => {
       ignore = true;
     };
+  // ponytail: urlNoBatch/urlNoFaktur are URL params, stable per page load — safe to omit from deps but listed for eslint
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kodeBrng]);
 
   const handleSubmit = async (

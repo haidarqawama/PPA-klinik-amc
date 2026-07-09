@@ -29,10 +29,8 @@ import { apiUrl } from "@/lib/api";
 import type {
   DashboardSummary,
   DashboardDistribution,
-  DashboardExpiredItem,
   DashboardStockMovement,
   DashboardRecentActivity,
-  DashboardPagination,
   DashboardPaginationMeta,
   DashboardResponse
 } from "@/types/dashboard";
@@ -205,10 +203,6 @@ export default function Dashboard() {
   const inventoryText = summary?.inventory_value != null ? `Rp${summary.inventory_value.toLocaleString("id-ID")}` : "-";
 
   // Calculate profit from stock movement (total masuk - total keluar)
-  const totalMasuk = stockMovement.reduce((sum, item) => sum + Number(item.barang_masuk), 0);
-  const totalKeluar = stockMovement.reduce((sum, item) => sum + Number(item.barang_keluar), 0);
-  const profit = totalMasuk - totalKeluar;
-
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">

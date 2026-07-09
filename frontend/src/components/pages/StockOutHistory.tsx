@@ -114,7 +114,7 @@ export default function StockOutHistory() {
         setLoading(false);
       }
     }
-  }, [page, searchQuery, selectedDate, selectedDateEnd]);
+  }, [page, searchQuery, selectedDate, selectedDateEnd, dateTemplate]);
 
   useEffect(() => {
     const controller = new AbortController();

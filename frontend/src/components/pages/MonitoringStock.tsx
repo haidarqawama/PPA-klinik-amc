@@ -7,13 +7,10 @@ import { formatDate, isValidExpireDate } from '@/utils/dateFormat';
 import { apiUrl } from '@/lib/api';
 import type {
   MonitoringPeriod,
-  MonitoringStockSummary,
   MonitoringStockLowItem,
   MonitoringStockExpiringItem,
   MonitoringStockTurnover,
   MonitoringStockCoverage,
-  MonitoringStockGolonganStat,
-  MonitoringStockGolonganValue,
   MonitoringStockResponse
 } from "@/types/monitoringStock";
 
@@ -22,13 +19,6 @@ type MonitoringDetailItem = MonitoringStockLowItem | MonitoringStockExpiringItem
 const MONITORING_REFRESH_MS = 30_000;
 const LIST_PREVIEW_LIMIT = 5;
 const OVERVIEW_PREVIEW_LIMIT = 7;
-
-const MONITORING_PERIODS: { value: MonitoringPeriod; label: string }[] = [
-  { value: "day", label: "30 Hari" },
-  { value: "month", label: "Bulanan" },
-  { value: "year", label: "Tahunan" },
-  { value: "all", label: "Semua" },
-];
 
 const TURNOVER_COLORS = ["#00B4D8", "#38A169", "#805AD5", "#DD6B20", "#E53E3E"];
 
@@ -86,11 +76,12 @@ function getCoverageDisplay(status: MonitoringStockCoverage["status"]) {
 }
 
 export default function MonitoringStock() {
-  const [period, setPeriod] = useState<MonitoringPeriod>("month");
+  const [period, /* setPeriod */] = useState<MonitoringPeriod>("month");
   const [data, setData] = useState<MonitoringStockResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_refreshing, setRefreshing] = useState(false);
 
   const [activeDetailType, setActiveDetailType] = useState<"critical" | "restock" | "expiring_soon" | "expired" | "all_low" | "turnover" | "coverage" | null>(null);
   const [detailItems, setDetailItems] = useState<MonitoringDetailItem[]>([]);
@@ -185,10 +176,6 @@ export default function MonitoringStock() {
     };
   }, [fetchMonitoring]);
 
-  const handlePeriodChange = (nextPeriod: MonitoringPeriod) => {
-    setPeriod(nextPeriod);
-    fetchMonitoring({ period: nextPeriod });
-  };
 
   if (loading && !data) {
     return (

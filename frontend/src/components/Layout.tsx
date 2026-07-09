@@ -13,6 +13,7 @@ import {
   X
 } from "lucide-react";
 import { usePathname } from "next/navigation";
+import Image from "next/image";
 import { useState } from "react";
 
 export function Layout({
@@ -49,9 +50,11 @@ export function Layout({
         <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-sidebar border-r border-sidebar-border px-6 pb-4">
           <div className="flex h-20 shrink-0 items-center">
             <div className="flex items-center gap-3">
-              <img
+              <Image
                 src="/logo/logo.png"
                 alt="Ampelgading Medical Centre"
+                width={48}
+                height={48}
                 className="h-12 w-auto object-contain"
               />
               <div>
@@ -97,9 +100,11 @@ export function Layout({
           <Menu className="h-6 w-6" />
         </button>
         <div className="flex items-center gap-2">
-          <img
+          <Image
             src="/logo/logo.png"
             alt="Ampelgading Medical Centre"
+            width={32}
+            height={32}
             className="h-8 w-auto object-contain"
           />
           <span className="text-sm font-semibold">Ampelgading Medical Centre</span>
@@ -113,9 +118,11 @@ export function Layout({
           <div className="fixed inset-y-0 left-0 w-full max-w-xs bg-sidebar border-r border-sidebar-border p-6">
             <div className="flex items-center justify-between mb-8">
               <div className="flex items-center gap-3">
-                <img
+                <Image
                   src="/logo/logo.png"
                   alt="Ampelgading Medical Centre"
+                  width={40}
+                  height={40}
                   className="h-10 w-auto object-contain"
                 />
                 <div>
