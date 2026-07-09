@@ -670,7 +670,7 @@ export default function MonitoringStock() {
           return (
             item.nama_brng.toLowerCase().includes(query) ||
             item.kode_brng.toLowerCase().includes(query) ||
-            (item.golongan && item.golongan.toLowerCase().includes(query))
+            ('golongan' in item && item.golongan && item.golongan.toLowerCase().includes(query))
           );
         });
 
@@ -818,6 +818,7 @@ export default function MonitoringStock() {
                       <tbody className="bg-card divide-y divide-border text-sm">
                         {paginatedDetailItems.map((item, idx) => {
                           if (isStockType) {
+                            const lowItem = item as MonitoringStockLowItem;
                             const isCritical = activeDetailType === "critical";
                             return (
                               <tr key={item.kode_brng + idx} className="hover:bg-muted/10 transition-colors">
@@ -828,16 +829,17 @@ export default function MonitoringStock() {
                                   {item.nama_brng}
                                 </td>
                                 <td className="px-6 py-3.5 text-muted-foreground">
-                                  {item.golongan}
+                                  {lowItem.golongan}
                                 </td>
                                 <td className={`px-6 py-3.5 text-right font-semibold ${isCritical ? "text-destructive" : "text-warning"}`}>
-                                  {formatNumber(item.stok)} {item.satuan || 'unit'}
+                                  {formatNumber(lowItem.stok)} {lowItem.satuan || 'unit'}
                                 </td>
                               </tr>
                             );
                           }
 
                           if (isTurnoverType) {
+                            const turnoverItem = item as MonitoringStockTurnover;
                             return (
                               <tr key={item.kode_brng + idx} className="hover:bg-muted/10 transition-colors">
                                 <td className="px-6 py-3.5 font-mono text-xs whitespace-nowrap text-muted-foreground">
@@ -847,16 +849,17 @@ export default function MonitoringStock() {
                                   {item.nama_brng}
                                 </td>
                                 <td className="px-6 py-3.5 text-muted-foreground font-semibold">
-                                  {Number(item.turnover_ratio || 0).toFixed(2)}×
+                                  {Number(turnoverItem.turnover_ratio || 0).toFixed(2)}×
                                 </td>
                                 <td className="px-6 py-3.5 text-right font-semibold text-foreground">
-                                  {formatNumber(item.persediaan_akhir)} {item.satuan || 'unit'}
+                                  {formatNumber(turnoverItem.persediaan_akhir)} {turnoverItem.satuan || 'unit'}
                                 </td>
                               </tr>
                             );
                           }
 
                           if (isCoverageType) {
+                            const coverageItem = item as MonitoringStockCoverage;
                             return (
                               <tr key={item.kode_brng + idx} className="hover:bg-muted/10 transition-colors">
                                 <td className="px-6 py-3.5 font-mono text-xs whitespace-nowrap text-muted-foreground">
@@ -866,18 +869,19 @@ export default function MonitoringStock() {
                                   {item.nama_brng}
                                 </td>
                                 <td className="px-6 py-3.5 text-muted-foreground font-semibold">
-                                  {item.coverage_days ? `${formatNumber(item.coverage_days)} hari` : "—"}
+                                  {coverageItem.coverage_days ? `${formatNumber(coverageItem.coverage_days)} hari` : "—"}
                                 </td>
                                 <td className="px-6 py-3.5 text-right font-semibold text-foreground">
-                                  {formatNumber(item.stok_saat_ini)} {item.satuan || 'unit'}
+                                  {formatNumber(coverageItem.stok_saat_ini)} {coverageItem.satuan || 'unit'}
                                 </td>
                               </tr>
                             );
                           }
 
-                          const isExpired = activeDetailType === "expired" || item.days_left < 0;
+                          const expItem = item as MonitoringStockExpiringItem;
+                          const isExpired = activeDetailType === "expired" || expItem.days_left < 0;
                           return (
-                            <tr key={item.kode_brng + "-" + item.expire + idx} className="hover:bg-muted/10 transition-colors">
+                            <tr key={item.kode_brng + "-" + expItem.expire + idx} className="hover:bg-muted/10 transition-colors">
                               <td className="px-6 py-3.5 font-mono text-xs whitespace-nowrap text-muted-foreground">
                                 {item.kode_brng}
                               </td>
@@ -885,16 +889,16 @@ export default function MonitoringStock() {
                                 {item.nama_brng}
                               </td>
                               <td className="px-6 py-3.5 text-muted-foreground font-mono text-xs">
-                                {item.batch || '-'}
+                                {expItem.batch || '-'}
                               </td>
                               <td className="px-6 py-3.5 text-muted-foreground font-mono">
-                                {formatDate(item.expire)}
+                                {formatDate(expItem.expire)}
                               </td>
                               <td className={`px-6 py-3.5 text-right font-semibold ${isExpired ? "text-destructive" : "text-warning"}`}>
                                 {isExpired ? (
-                                  <span>Expired ({Math.abs(item.days_left)} hari lalu)</span>
+                                  <span>Expired ({Math.abs(expItem.days_left)} hari lalu)</span>
                                 ) : (
-                                  <span>{item.days_left} hari lagi</span>
+                                  <span>{expItem.days_left} hari lagi</span>
                                 )}
                               </td>
                             </tr>
