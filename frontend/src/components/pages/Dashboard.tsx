@@ -8,9 +8,6 @@ import {
   TrendingUp,
   TrendingDown,
   Banknote,
-  DollarSign,
-  Bell,
-  X
 } from "lucide-react";
 import {
   BarChart,
@@ -35,75 +32,7 @@ import type {
   DashboardResponse
 } from "@/types/dashboard";
 
-const notifications = [
-  {
-    id: 1,
-    type: "expired",
-    title: "Barang Sudah Expired!",
-    message: "Omeprazole 20mg Batch B2023-012 sudah expired sejak 10/05/2026 - Segera tarik dari inventory!",
-    time: "2 menit lalu",
-    read: false
-  },
-  {
-    id: 2,
-    type: "stock",
-    title: "Stok Minimum Tercapai",
-    message: "Paracetamol 500mg hanya tersisa 20 strip (min: 50)",
-    time: "5 menit lalu",
-    read: false
-  },
-  {
-    id: 3,
-    type: "expired",
-    title: "Barang Mendekati Expired",
-    message: "Vitamin B Complex akan expired dalam 17 hari (30/05/2026)",
-    time: "15 menit lalu",
-    read: false
-  },
-  {
-    id: 4,
-    type: "stock",
-    title: "Stok Kritis",
-    message: "Betadine Solution tersisa 15 botol (min: 50)",
-    time: "30 menit lalu",
-    read: false
-  },
-  {
-    id: 5,
-    type: "expired",
-    title: "Barang Expired!",
-    message: "Insulin Batch A2023-089 expired 15/05/2026 - Harap segera dimusnahkan",
-    time: "45 menit lalu",
-    read: false
-  },
-  {
-    id: 6,
-    type: "price",
-    title: "Perubahan Harga",
-    message: "Harga beli Amoxicillin 500mg berubah dari Rp 1.200 → Rp 1.350",
-    time: "1 jam lalu",
-    read: false
-  },
-  {
-    id: 7,
-    type: "expired",
-    title: "Barang Segera Expired",
-    message: "Paracetamol 500mg Batch B2024-001 akan expired dalam 33 hari",
-    time: "2 jam lalu",
-    read: true
-  },
-  {
-    id: 8,
-    type: "price",
-    title: "Perubahan Harga",
-    message: "Harga jual Vitamin C 1000mg diupdate menjadi Rp 2.200",
-    time: "3 jam lalu",
-    read: true
-  },
-];
-
 export default function Dashboard() {
-  const [showNotifications, setShowNotifications] = useState(false);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [expiredCount, setExpiredCount] = useState<number | null>(null);
   const [distribution, setDistribution] = useState<DashboardDistribution[]>([]);
@@ -111,7 +40,6 @@ export default function Dashboard() {
   const [recentActivities, setRecentActivities] = useState<DashboardRecentActivity[]>([]);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const unreadCount = notifications.filter(n => !n.read).length;
 
   const [golonganPage, setGolonganPage] = useState(1);
   const [activitiesPage, setActivitiesPage] = useState(1);
@@ -211,122 +139,6 @@ export default function Dashboard() {
           <p className="text-sm text-muted-foreground mt-1">Ringkasan sistem inventory Ampelgading Medical Centre</p>
         </div>
 
-        {/* Notification Bell */}
-        <div className="relative">
-          <button
-            onClick={() => setShowNotifications(!showNotifications)}
-            className="relative p-3 rounded-xl bg-card border border-border hover:bg-muted/50 transition-colors"
-          >
-            <Bell className="w-5 h-5 text-foreground" />
-            {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground text-xs flex items-center justify-center rounded-full font-semibold">
-                {unreadCount}
-              </span>
-            )}
-          </button>
-
-          {/* Notification Dropdown */}
-          {showNotifications && (
-            <>
-              {/* Backdrop */}
-              <div
-                className="fixed inset-0 z-40"
-                onClick={() => setShowNotifications(false)}
-              />
-
-              {/* Notification Panel */}
-              <div className="absolute right-0 mt-2 w-96 max-h-[600px] bg-card border border-border rounded-2xl shadow-2xl z-50 overflow-hidden">
-                {/* Header */}
-                <div className="p-4 border-b border-border flex items-center justify-between bg-muted/30">
-                  <div>
-                    <h3 className="font-semibold text-foreground">Notifikasi</h3>
-                    <p className="text-xs text-muted-foreground">{unreadCount} notifikasi belum dibaca</p>
-                  </div>
-                  <button
-                    onClick={() => setShowNotifications(false)}
-                    className="p-1 rounded-lg hover:bg-muted transition-colors"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Notification List */}
-                <div className="overflow-y-auto max-h-[500px]">
-                  {notifications.map((notif) => {
-                    const getNotifStyle = () => {
-                      switch (notif.type) {
-                        case "stock":
-                          return {
-                            bg: "bg-warning/10",
-                            border: "border-warning/20",
-                            icon: <AlertTriangle className="w-5 h-5 text-warning" />,
-                            iconBg: "bg-warning/10"
-                          };
-                        case "expired":
-                          return {
-                            bg: "bg-destructive/10",
-                            border: "border-destructive/20",
-                            icon: <Calendar className="w-5 h-5 text-destructive" />,
-                            iconBg: "bg-destructive/10"
-                          };
-                        case "price":
-                          return {
-                            bg: "bg-primary/10",
-                            border: "border-primary/20",
-                            icon: <DollarSign className="w-5 h-5 text-primary" />,
-                            iconBg: "bg-primary/10"
-                          };
-                        default:
-                          return {
-                            bg: "bg-muted/10",
-                            border: "border-border",
-                            icon: <Bell className="w-5 h-5 text-muted-foreground" />,
-                            iconBg: "bg-muted"
-                          };
-                      }
-                    };
-
-                    const style = getNotifStyle();
-
-                    return (
-                      <div
-                        key={notif.id}
-                        className={`p-4 border-b border-border hover:bg-muted/20 transition-colors cursor-pointer ${
-                          !notif.read ? "bg-muted/30" : ""
-                        }`}
-                      >
-                        <div className="flex gap-3">
-                          <div className={`w-10 h-10 rounded-xl ${style.iconBg} flex items-center justify-center flex-shrink-0`}>
-                            {style.icon}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="font-medium text-sm text-foreground">{notif.title}</p>
-                              {!notif.read && (
-                                <span className="w-2 h-2 bg-primary rounded-full flex-shrink-0 mt-1.5" />
-                              )}
-                            </div>
-                            <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                              {notif.message}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-2">{notif.time}</p>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Footer */}
-                <div className="p-3 border-t border-border bg-muted/30">
-                  <button className="w-full py-2 text-sm text-primary hover:text-primary/80 transition-colors font-medium">
-                    Tandai Semua Sudah Dibaca
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
       </div>
 
       {/* KPI Cards */}
