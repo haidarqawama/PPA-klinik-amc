@@ -17,6 +17,8 @@ import type {
   MonitoringStockResponse
 } from "@/types/monitoringStock";
 
+type MonitoringDetailItem = MonitoringStockLowItem | MonitoringStockExpiringItem | MonitoringStockTurnover | MonitoringStockCoverage;
+
 const MONITORING_REFRESH_MS = 30_000;
 const LIST_PREVIEW_LIMIT = 5;
 const OVERVIEW_PREVIEW_LIMIT = 7;
@@ -91,12 +93,12 @@ export default function MonitoringStock() {
   const [refreshing, setRefreshing] = useState(false);
 
   const [activeDetailType, setActiveDetailType] = useState<"critical" | "restock" | "expiring_soon" | "expired" | "all_low" | "turnover" | "coverage" | null>(null);
-  const [detailItems, setDetailItems] = useState<any[]>([]);
+  const [detailItems, setDetailItems] = useState<MonitoringDetailItem[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailSearchQuery, setDetailSearchQuery] = useState("");
   const [detailCurrentPage, setDetailCurrentPage] = useState(1);
 
-  const openDetailModal = async (type: "critical" | "restock" | "expiring_soon" | "expired" | "all_low" | "turnover" | "coverage", items?: any[]) => {
+  const openDetailModal = async (type: "critical" | "restock" | "expiring_soon" | "expired" | "all_low" | "turnover" | "coverage", items?: MonitoringDetailItem[]) => {
     setActiveDetailType(type);
     setDetailSearchQuery("");
     setDetailCurrentPage(1);
@@ -114,7 +116,7 @@ export default function MonitoringStock() {
         throw new Error("Gagal mengambil data detail");
       }
       const body = await response.json();
-      setDetailItems((body.data || []).filter((item: any) => (type === 'critical' || type === 'restock') ? item.stok > 0 : true));
+      setDetailItems((body.data || []).filter((item: MonitoringDetailItem) => (type === 'critical' || type === 'restock') ? 'stok' in item && item.stok > 0 : true));
     } catch (err) {
       console.error(err);
     } finally {
@@ -158,6 +160,8 @@ export default function MonitoringStock() {
   }, [period]);
 
   useEffect(() => {
+    // ponytail: extract async data-fetching into a custom hook with Suspense when patterns stabilize
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchMonitoring();
   }, [fetchMonitoring]);
 

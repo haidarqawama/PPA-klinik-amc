@@ -12,20 +12,17 @@ import {
   Menu,
   X
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import { useState } from "react";
 
 export function Layout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [activeHref, setActiveHref] = useState("");
-
-  useEffect(() => {
-    const p = window.location.pathname.replace(/\/$/, "") || "/";
-    setActiveHref(p);
-  }, []);
+  const activeHref = pathname.replace(/\/$/, "") || "/";
 
   function isActive(href: string): boolean {
     if (!activeHref) return false;

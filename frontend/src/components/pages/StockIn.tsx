@@ -65,6 +65,7 @@ export default function StockIn() {
   useEffect(() => {
     const keyword = search.trim();
     if (keyword.length < 2) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setItems([]);
       return;
     }

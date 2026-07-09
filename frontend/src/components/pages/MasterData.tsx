@@ -98,7 +98,7 @@ export default function MasterData() {
 
   const filteredRecords = useMemo(() => {
     const keyword = searchQuery.trim().toLowerCase();
-    let list = [...(records[activeType] || [])];
+    const list = [...(records[activeType] || [])];
 
     // Urutkan berdasarkan kode
     list.sort((a, b) =>

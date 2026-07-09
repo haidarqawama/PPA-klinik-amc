@@ -13,7 +13,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const [error, setError] = useState<string | null>(null);
   const onScanRef = useRef(onScan);
   const onCloseRef = useRef(onClose);
-  const readerRef = useRef<any>(null);
+  const readerRef = useRef<{ reset: () => void } | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
