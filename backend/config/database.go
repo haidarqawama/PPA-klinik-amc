@@ -419,7 +419,7 @@ func RefreshMonitoringSummary() {
 
 	type dashRow struct {
 		TotalItems    int64
-		TotalStock    int64
+		TotalStock    float64
 		InventoryVal  float64
 		LowStockCount int64
 	}
@@ -427,7 +427,7 @@ func RefreshMonitoringSummary() {
 	SIK.Raw(`
 		SELECT
 			COUNT(DISTINCT databarang.kode_brng) AS total_items,
-			COALESCE(SUM(gs.total_stok), 0) AS total_stock,
+			CAST(COALESCE(SUM(gs.total_stok), 0) AS SIGNED) AS total_stock,
 			COALESCE(SUM(gs.total_stok * databarang.h_beli), 0) AS inventory_val,
 			COALESCE(SUM(IF(COALESCE(gs.total_stok, 0) <= 50, 1, 0)), 0) AS low_stock_count
 		FROM databarang

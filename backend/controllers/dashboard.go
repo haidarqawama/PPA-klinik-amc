@@ -100,12 +100,55 @@ func GetDashboard(c *gin.Context) {
 			captureErr(e)
 			return
 		}
-		summary.TotalItems = row.TotalItems
-		summary.TotalStock = row.TotalStock
-		summary.InventoryValue = row.InventoryValue
-		summary.LowStockCount = row.LowStockCount
-		expiringSoonCount = row.ExpiringSoon
-		expiredCount = row.Expired
+		// Live fallback when cache empty
+		if row.TotalStock == 0 {
+			type fRow struct {
+				TotalItems    int64
+				TotalStock    int64
+				InventoryVal  float64
+				LowStockCount int64
+			}
+			var fr fRow
+			config.SIK.Raw(`
+				SELECT
+					COUNT(DISTINCT d.kode_brng) AS total_items,
+					COALESCE(SUM(COALESCE(gs.total_stok, 0)), 0) AS total_stock,
+					COALESCE(SUM(COALESCE(gs.total_stok, 0) * d.h_beli), 0) AS inventory_val,
+					COALESCE(SUM(IF(COALESCE(gs.total_stok, 0) <= 50, 1, 0)), 0) AS low_stock_count
+				FROM databarang d
+				LEFT JOIN (
+					SELECT kode_brng, SUM(stok) AS total_stok
+					FROM gudangbarang WHERE kd_bangsal = 'AP' AND stok > 0
+					GROUP BY kode_brng
+				) gs ON d.kode_brng = gs.kode_brng
+			`).Scan(&fr)
+			type eRow struct {
+				ExpiringSoon int64 `gorm:"column:expiring_soon"`
+				Expired      int64 `gorm:"column:expired"`
+			}
+			var er eRow
+			config.SIK.Raw(`
+				SELECT
+					COALESCE(SUM(CASE WHEN expire BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END), 0) AS expiring_soon,
+					COALESCE(SUM(CASE WHEN expire < CURDATE() THEN 1 ELSE 0 END), 0) AS expired
+				FROM databarang
+				WHERE expire IS NOT NULL AND expire != '' AND expire != '0000-00-00'
+					AND expire >= '1990-01-01' AND expire <= DATE_ADD(CURDATE(), INTERVAL 15 YEAR)
+			`).Scan(&er)
+			summary.TotalItems = fr.TotalItems
+			summary.TotalStock = fr.TotalStock
+			summary.InventoryValue = fr.InventoryVal
+			summary.LowStockCount = fr.LowStockCount
+			expiringSoonCount = er.ExpiringSoon
+			expiredCount = er.Expired
+		} else {
+			summary.TotalItems = row.TotalItems
+			summary.TotalStock = row.TotalStock
+			summary.InventoryValue = row.InventoryValue
+			summary.LowStockCount = row.LowStockCount
+			expiringSoonCount = row.ExpiringSoon
+			expiredCount = row.Expired
+		}
 
 		// Stock change vs previous month
 		type movRow struct {
